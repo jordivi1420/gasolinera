@@ -22,23 +22,29 @@ export default function SucursalesTable() {
   const [rows, setRows] = useState<SucursalRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [nextStartKey, setNextStartKey] = useState<string | undefined>(undefined);
-  const backStack = useRef<string[]>([]);
-  const [currentStartKey, setCurrentStartKey] = useState<string | undefined>(undefined);
 
-  async function loadPage(startKey?: string, pushHistory = true) {
+  // Historial de cursores para paginar hacia atrás/adelante
+  // history[0] = primera página (sin startKey), luego vamos agregando nextStartKey
+  const [history, setHistory] = useState<Array<string | undefined>>([undefined]);
+  const [cursorIdx, setCursorIdx] = useState(0);
+
+  // Guardamos el último nextStartKey devuelto para el cursor actual
+  const nextKeyRef = useRef<string | undefined>(undefined);
+
+  async function loadPage(startKey: string | undefined) {
     setLoading(true);
-    const { rows, nextStartKey, usedStartKey } = await fetchSucursalesPage(startKey);
-    setRows(rows);
-    setNextStartKey(nextStartKey);
-
-    if (pushHistory && usedStartKey) backStack.current.push(usedStartKey);
-    setCurrentStartKey(usedStartKey);
-    setLoading(false);
+    try {
+      const { rows, nextStartKey } = await fetchSucursalesPage(startKey);
+      setRows(rows);
+      nextKeyRef.current = nextStartKey; // el "Siguiente" de ESTA página
+    } finally {
+      setLoading(false);
+    }
   }
 
+  // Cargar primera página
   useEffect(() => {
-    loadPage(undefined, false);
+    loadPage(history[0]); // undefined
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -52,6 +58,28 @@ export default function SucursalesTable() {
         r.municipio.toLowerCase().includes(q)
     );
   }, [rows, search]);
+
+  const canGoPrev = cursorIdx > 0;
+  const canGoNext = !!nextKeyRef.current;
+
+  const goPrev = () => {
+    if (!canGoPrev) return;
+    const newIdx = cursorIdx - 1;
+    setCursorIdx(newIdx);
+    const prevKey = history[newIdx]; // puede ser undefined si es la primera
+    loadPage(prevKey);
+  };
+
+  const goNext = () => {
+    if (!canGoNext) return;
+    const nextKey = nextKeyRef.current!;
+    const newHistory = history.slice(0, cursorIdx + 1); // cortamos cualquier "futuro"
+    newHistory.push(nextKey);
+    setHistory(newHistory);
+    const newIdx = cursorIdx + 1;
+    setCursorIdx(newIdx);
+    loadPage(nextKey);
+  };
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
@@ -156,14 +184,8 @@ export default function SucursalesTable() {
       <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-800">
         <button
           className="px-3 py-2 text-sm border rounded-lg border-gray-300 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-white/5"
-          disabled={backStack.current.length <= 1}
-          onClick={() => {
-            if (backStack.current.length > 1) {
-              backStack.current.pop();
-              const prev = backStack.current.pop();
-              if (prev) loadPage(prev, false);
-            }
-          }}
+          disabled={!canGoPrev || loading}
+          onClick={goPrev}
         >
           Anterior
         </button>
@@ -173,9 +195,9 @@ export default function SucursalesTable() {
         </span>
 
         <button
-          className="px-3 py-2 text-sm border rounded-lg border-gray-300 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg:white/5"
-          disabled={!nextStartKey}
-          onClick={() => nextStartKey && loadPage(nextStartKey, true)}
+          className="px-3 py-2 text-sm border rounded-lg border-gray-300 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-white/5"
+          disabled={!canGoNext || loading}
+          onClick={goNext}
         >
           Siguiente
         </button>

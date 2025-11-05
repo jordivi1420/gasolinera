@@ -4,10 +4,22 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { ref, get } from "firebase/database";
 import { auth, rtdb } from "../config/firebase";
 
+type Role =
+  | "admin"               // admin global (si además is_global_admin === true)
+  | "branch_admin"        // admin de sucursal (si lo usas)
+  | "auditor"
+  | "contractor_admin"    // admin del contratista (su propio espacio)
+  | "contractor_user"     // usuario del contratista
+  | "viewer";
+
 type Profile = {
-  sucursal_id: string;
-  rol: "admin" | "auditor" | "visor";
-  is_admin_global?: boolean;
+  is_global_admin?: boolean;
+  role: Role;
+  branchId?: string | null;
+  contractorId?: string | null;
+  status?: "active" | "inactive";
+  displayName?: string;
+  email?: string;
 };
 
 type Ctx = {
@@ -28,7 +40,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       try {
-        const snap = await get(ref(rtdb, `usuarios/${u.uid}`));
+        // Lee el perfil desde users/{uid} (no usuarios/{uid})
+        const snap = await get(ref(rtdb, `users/${u.uid}`));
         const profile = snap.exists() ? (snap.val() as Profile) : null;
         setState({ user: u, profile, loading: false });
       } catch {

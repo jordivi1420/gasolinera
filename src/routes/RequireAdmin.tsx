@@ -5,6 +5,6 @@ import { useAuth } from "../context/AuthContext";
 export default function RequireAdmin() {
   const { profile } = useAuth();
 
-  if (!profile?.is_admin_global) return <Navigate to="/" replace />;
+  if (!profile?. is_global_admin) return <Navigate to="/" replace />;
   return <Outlet />;
 }

@@ -16,6 +16,9 @@ import Alerts from "./pages/UiElements/Alerts";
 import Badges from "./pages/UiElements/Badges";
 import AdminSucursalesPage from "./pages/admin/sucursales/AdminSucursalesPage";
 import SucursalForm from "./pages/admin/sucursales/SucursalForm";
+import AdminContratistasPage from "./pages/admin/contratistas/AdminContratistasPage";
+import ContratistaForm from "./pages/admin/contratistas/ContratistaForm";
+
 import Avatars from "./pages/UiElements/Avatars";
 import Buttons from "./pages/UiElements/Buttons";
 import LineChart from "./pages/Charts/LineChart";
@@ -88,6 +91,19 @@ export default function App() {
                     path="/admin/sucursales/:id/editar"
                     element={<SucursalForm />}
                   />
+                  <Route 
+                    path="/admin/contratistas" 
+                    element={<AdminContratistasPage />} 
+                  />
+                  <Route 
+                    path="/admin/contratistas/nueva" 
+                    element={<ContratistaForm />} 
+                  />
+                  <Route 
+                    path="/admin/contratistas/:id/editar" 
+                  element={<ContratistaForm />} 
+                  />
+
                 </Route>
               </Route>
             </Route>

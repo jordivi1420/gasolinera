@@ -1,4 +1,4 @@
-import { ref, set, update, get, child, query, orderByChild, equalTo } from "firebase/database";
+import { ref, set, update, get } from "firebase/database";
 import { rtdb } from "../config/firebase";
 import { slugify } from "../utils/slugify";
 import { cleanUndefined } from "../utils/clean";
