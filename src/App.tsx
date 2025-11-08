@@ -1,9 +1,5 @@
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  Navigate,
-} from "react-router-dom";
+// src/App.tsx
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { Suspense } from "react";
 
 import SignIn from "./pages/AuthPages/SignIn";
@@ -14,8 +10,18 @@ import Videos from "./pages/UiElements/Videos";
 import Images from "./pages/UiElements/Images";
 import Alerts from "./pages/UiElements/Alerts";
 import Badges from "./pages/UiElements/Badges";
+
 import AdminSucursalesPage from "./pages/admin/sucursales/AdminSucursalesPage";
+import ContratistaSucursalesPage from "./pages/contratista/sucursales/ContratistaSucursalesPage";
 import SucursalForm from "./pages/admin/sucursales/SucursalForm";
+import SucursalView from "./pages/admin/sucursales/SucursalView";
+import SubcentrosPage from "./pages/admin/sucursales/manage/SubcentrosPage";
+import ContratistasPage from "./pages/admin/sucursales/manage/ContratistasPage";
+import UsuariosPage from "./pages/admin/sucursales/manage/UsuariosPage";
+import ReportesPage from "./pages/admin/sucursales/manage/ReportesPage";
+import SucursalManageLayout from "./pages/admin/sucursales/manage/SucursalManageLayout";
+
+
 import AdminContratistasPage from "./pages/admin/contratistas/AdminContratistasPage";
 import ContratistaForm from "./pages/admin/contratistas/ContratistaForm";
 
@@ -31,12 +37,13 @@ import AppLayout from "./layout/AppLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
 import Home from "./pages/Dashboard/Home";
 
-// Protección
+// Guards
 import RequireAuth from "./routes/RequireAuth";
 import RequireAdmin from "./routes/RequireAdmin";
 import RedirectIfAuth from "./routes/RedirectIfAuth";
+import RequireContractor from "./routes/RequireContractor";
 
-// Auth
+// Auth Provider ✅
 import { AuthProvider } from "./context/AuthContext";
 
 export default function App() {
@@ -46,19 +53,19 @@ export default function App() {
       <AuthProvider>
         <Suspense fallback={<div className="p-6">Cargando…</div>}>
           <Routes>
-            {/* Rutas públicas SOLO si NO estás autenticado */}
+            {/* Públicas (solo si NO estás autenticado) */}
             <Route element={<RedirectIfAuth />}>
               <Route path="/signin" element={<SignIn />} />
               <Route path="/signup" element={<SignUp />} />
+              <Route path="/contractor/signin" element={<SignIn />} />
             </Route>
 
-            {/* Rutas protegidas (requieren login) */}
+            {/* Protegidas */}
             <Route element={<RequireAuth />}>
               <Route element={<AppLayout />}>
-                {/* Home del dashboard */}
                 <Route index element={<Home />} />
 
-                {/* Páginas existentes */}
+                {/* Páginas generales */}
                 <Route path="/profile" element={<UserProfiles />} />
                 <Route path="/calendar" element={<Calendar />} />
                 <Route path="/blank" element={<Blank />} />
@@ -73,37 +80,32 @@ export default function App() {
                 <Route path="/line-chart" element={<LineChart />} />
                 <Route path="/bar-chart" element={<BarChart />} />
 
-                {/* SOLO Administrador Global */}
+                {/* Admin Global */}
                 <Route element={<RequireAdmin />}>
-                  <Route
-                    path="/admin"
-                    element={<Navigate to="/admin/sucursales" replace />}
-                  />
-                  <Route
-                    path="/admin/sucursales"
-                    element={<AdminSucursalesPage />}
-                  />
-                  <Route
-                    path="/admin/sucursales/nueva"
-                    element={<SucursalForm />}
-                  />
-                  <Route
-                    path="/admin/sucursales/:id/editar"
-                    element={<SucursalForm />}
-                  />
-                  <Route 
-                    path="/admin/contratistas" 
-                    element={<AdminContratistasPage />} 
-                  />
-                  <Route 
-                    path="/admin/contratistas/nueva" 
-                    element={<ContratistaForm />} 
-                  />
-                  <Route 
-                    path="/admin/contratistas/:id/editar" 
-                  element={<ContratistaForm />} 
-                  />
+                  <Route path="/admin" element={<Navigate to="/admin/sucursales" replace />} />
+                  <Route path="/admin/sucursales" element={<AdminSucursalesPage />} />
+                  <Route path="/admin/sucursales/nueva" element={<SucursalForm />} />
+                  <Route path="/admin/sucursales/:id/editar" element={<SucursalForm />} />
+                  <Route path="/admin/sucursales/:sucursalId" element={<SucursalView />} />
 
+                  <Route path="/admin/sucursales/:sucursalId/gestionar" element={<SucursalManageLayout />}>
+                    <Route index element={<Navigate to="contratistas" replace />} />
+                    <Route path="subcentros" element={<SubcentrosPage />} />
+                    <Route path="contratistas" element={<ContratistasPage />} />
+                    <Route path="usuarios" element={<UsuariosPage />} />
+                    <Route path="reportes" element={<ReportesPage />} />
+                  </Route>
+
+                  <Route path="/admin/contratistas" element={<AdminContratistasPage />} />
+                  <Route path="/admin/contratistas/nueva" element={<ContratistaForm />} />
+                  <Route path="/admin/contratistas/:id/editar" element={<ContratistaForm />} />
+                </Route>
+
+                {/* Área contratistas */}
+                <Route element={<RequireContractor />}>
+                  <Route path="/c/:branchId/:contractorId/dashboard" element={<ContratistaSucursalesPage />} />
+                  <Route path="/c/:branchId/:contractorId/perfil" element={<UserProfiles />} />
+                  <Route path="/c/:branchId/:contractorId/reportes" element={<ReportsPlaceholder />} />
                 </Route>
               </Route>
             </Route>
@@ -115,4 +117,8 @@ export default function App() {
       </AuthProvider>
     </Router>
   );
+}
+
+function ReportsPlaceholder() {
+  return <div className="p-6">Reportes del contratista (WIP)</div>;
 }

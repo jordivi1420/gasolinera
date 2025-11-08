@@ -15,12 +15,32 @@ import { useAuth } from "../../../../context/AuthContext";
 // services
 import { listSucursales } from "../../../../services/sucursales.service";
 import {
-  listAllContratistas,
+  listAllContratistasUnified,
   listContratistasByBranch,
   type ContratistaRow,
+  type ContratistaUnifiedRow,
 } from "../../../../services/contratistas.service";
 
 type SucursalOpt = { value: string; label: string };
+
+// Tipo unificado para render (filtrado por sucursal vs unificado)
+type RowAll =
+  | (ContratistaUnifiedRow & { isOrphan?: false })
+  | (ContratistaRow & { isOrphan?: false })
+  | ({
+      // huérfano proveniente de listAllContratistasUnified()
+      id: string;
+      nombre: string;
+      nit?: string;
+      contacto?: { nombre?: string; telefono?: string; email?: string };
+      activo: boolean;
+      creado_en: number;
+      creado_por: string;
+      actualizado_en?: number;
+      actualizado_por?: string;
+      branchIds: string[];
+      isOrphan: true;
+    });
 
 export default function ContractorsTable({
   branchId: branchIdProp,
@@ -29,7 +49,6 @@ export default function ContractorsTable({
 }) {
   const nav = useNavigate();
   const { profile } = useAuth();
-
   const isGlobalAdmin = !!profile?.is_global_admin;
 
   // Estado inicial del filtro
@@ -37,14 +56,14 @@ export default function ContractorsTable({
     branchIdProp ?? (isGlobalAdmin ? undefined : profile?.branchId ?? undefined)
   );
 
-  const [rows, setRows] = useState<ContratistaRow[]>([]);
+  const [rows, setRows] = useState<RowAll[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
   // Sucursales para el select (admin global)
   const [sucursales, setSucursales] = useState<SucursalOpt[]>([]);
 
-  // Cargar sucursales
+  // Cargar sucursales (solo admin global sin branchId de prop)
   useEffect(() => {
     if (!isGlobalAdmin || branchIdProp) return;
     (async () => {
@@ -70,13 +89,19 @@ export default function ContractorsTable({
       setErr(null);
       try {
         if (!branchId) {
-          const all = await listAllContratistas();
-          const sorted = [...all].sort((a, b) => a.nombre.localeCompare(b.nombre));
-          setRows(sorted);
+          // Vista unificada sin duplicados + incluye huérfanos (sin sucursal)
+          const allUnified = await listAllContratistasUnified();
+          const normalized: RowAll[] = allUnified.map((r: any) =>
+            String(r.id).startsWith("auth-")
+              ? { ...r, isOrphan: true }
+              : { ...r, isOrphan: false }
+          );
+          setRows(normalized);
         } else {
+          // Vista por sucursal puntual
           const list = await listContratistasByBranch(branchId);
           const sorted = [...list].sort((a, b) => a.nombre.localeCompare(b.nombre));
-          setRows(sorted);
+          setRows(sorted as RowAll[]);
         }
       } catch {
         setErr("No se pudieron cargar los contratistas.");
@@ -92,21 +117,71 @@ export default function ContractorsTable({
     []
   );
 
-  // Handler flexible para tu Select (por si devuelve string u objeto)
+  // Handler flexible para tu Select
   const handleSucursalChange = (val: unknown) => {
-    // si devuelve string
     if (typeof val === "string") {
       setBranchId(val ? val : undefined);
       return;
     }
-    // si devuelve opción { value, label }
     if (val && typeof val === "object" && "value" in (val as any)) {
       const v = (val as any).value as string;
       setBranchId(v ? v : undefined);
       return;
     }
-    // fallback (limpieza)
     setBranchId(undefined);
+  };
+
+  // Navegaciones
+  const handleView = (row: RowAll) => {
+    const isOrphan = (row as any).isOrphan === true;
+    if (isOrphan) return; // sin detalle aún
+
+    const bIds = (row as any).branchIds as string[] | undefined;
+
+    if (!branchId && bIds && bIds.length > 0) {
+      // sin filtro activo: usa primera sucursal (o podrías abrir modal para elegir)
+      nav(`/admin/contratistas/${row.id}`, { state: { branchId: bIds[0] } });
+      return;
+    }
+
+    if (branchId) {
+      nav(`/admin/contratistas/${row.id}`, { state: { branchId } });
+      return;
+    }
+
+    nav(`/admin/contratistas/${row.id}`);
+  };
+
+  const handleEdit = (row: RowAll) => {
+    const isOrphan = (row as any).isOrphan === true;
+
+    if (isOrphan) {
+      // Mantiene botón "Editar" (como pediste), pero lleva al flujo de asignación/creación
+      nav(`/admin/contratistas/nueva`, {
+        state: { prefillName: row.nombre, prefillEmail: row.contacto?.email ?? "" },
+      });
+      return;
+    }
+
+    const bIds = (row as any).branchIds as string[] | undefined;
+
+    if (!branchId && bIds && bIds.length > 1) {
+      // Tiene varias sucursales; por simplicidad usamos la primera (puedes mejorar con modal)
+      nav(`/admin/contratistas/${row.id}/editar`, { state: { branchId: bIds[0] } });
+      return;
+    }
+
+    if (!branchId && bIds && bIds.length === 1) {
+      nav(`/admin/contratistas/${row.id}/editar`, { state: { branchId: bIds[0] } });
+      return;
+    }
+
+    if (branchId) {
+      nav(`/admin/contratistas/${row.id}/editar`, { state: { branchId } });
+      return;
+    }
+
+    nav(`/admin/contratistas/${row.id}/editar`);
   };
 
   return (
@@ -117,20 +192,16 @@ export default function ContractorsTable({
           <div className="text-sm text-gray-600 dark:text-gray-400">
             {branchId
               ? "Mostrando contratistas de la sucursal seleccionada"
-              : "Mostrando todos los contratistas. Filtra por sucursal si deseas."}
+              : "Mostrando todos los contratistas (unificados) y huérfanos sin sucursal."}
           </div>
 
           <div className="flex items-center gap-3">
             <div className="min-w-64">
               <Select
-                // 🔑 Truco: forzar remount cuando branchId cambia de valor/undefined
-                key={branchId ?? "all"}
+                key={branchId ?? "all"}         // remount al cambiar filtro
                 options={sucursales}
-                placeholder="Sucursal…"       // <- tu Select usa 'placeHolder' (H mayúscula)
-                // 👇 tu Select no soporta 'value', así que no lo pasamos
+                
                 onChange={handleSucursalChange}
-                // Si tu Select soporta 'isClearable', actívalo y en el clear volverá a mostrar el placeholder.
-                // isClearable
               />
             </div>
 
@@ -197,75 +268,91 @@ export default function ContractorsTable({
                 >
                   {branchId
                     ? "No hay contratistas registrados en esta sucursal."
-                    : "No hay contratistas registrados."}
+                    : "No hay contratistas ni huérfanos registrados."}
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell className="px-5 py-4 sm:px-6 text-start">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10 grid place-items-center text-xs text-gray-500">
-                        {c.nombre.slice(0, 2).toUpperCase()}
+              rows.map((c: RowAll) => {
+                // key única (evita colisiones cuando hay filtro por sucursal)
+                const rowKey = (c as any).branchId ? `${(c as any).branchId}:${c.id}` : c.id;
+                const branchesInfo = (c as any).branchIds as string[] | undefined;
+                const isOrphan = (c as any).isOrphan === true;
+
+                return (
+                  <TableRow key={rowKey}>
+                    <TableCell className="px-5 py-4 sm:px-6 text-start">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10 grid place-items-center text-xs text-gray-500">
+                          {c.nombre.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <span className="block font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                            {c.nombre}
+                          </span>
+                          <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
+                            ID: {c.id}
+                          </span>
+
+                          {!branchId && branchesInfo && (
+                            <span className="inline-flex mt-1 items-center gap-2 rounded-full border px-2 py-0.5 text-[11px] text-gray-600 border-gray-200 dark:border-white/10 dark:text-gray-300">
+                              {branchesInfo.length === 0
+                                ? "Sin sucursal (huérfano)"
+                                : branchesInfo.length === 1
+                                ? "1 sucursal"
+                                : `${branchesInfo.length} sucursales`}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <span className="block font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                          {c.nombre}
+                    </TableCell>
+
+                    <TableCell className="px-4 py-3 text-gray-600 text-start text-theme-sm dark:text-gray-400">
+                      {c.nit || "—"}
+                    </TableCell>
+
+                    <TableCell className="px-4 py-3 text-gray-600 text-start text-theme-sm dark:text-gray-400">
+                      {c.contacto?.nombre || "—"}
+                      {c.contacto?.email ? (
+                        <span className="block text-theme-xs text-gray-500 dark:text-gray-400">
+                          {c.contacto.email}
                         </span>
-                        <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
-                          ID: {c.id}
-                        </span>
-                      </div>
-                    </div>
-                  </TableCell>
+                      ) : null}
+                    </TableCell>
 
-                  <TableCell className="px-4 py-3 text-gray-600 text-start text-theme-sm dark:text-gray-400">
-                    {c.nit || "—"}
-                  </TableCell>
+                    <TableCell className="px-4 py-3 text-gray-600 text-start text-theme-sm dark:text-gray-400">
+                      {c.contacto?.telefono || "—"}
+                    </TableCell>
 
-                  <TableCell className="px-4 py-3 text-gray-600 text-start text-theme-sm dark:text-gray-400">
-                    {c.contacto?.nombre || "—"}
-                    {c.contacto?.email ? (
-                      <span className="block text-theme-xs text-gray-500 dark:text-gray-400">
-                        {c.contacto.email}
-                      </span>
-                    ) : null}
-                  </TableCell>
+                    <TableCell className="px-4 py-3 text-start">
+                      <Badge size="sm" color={isOrphan ? "warning" : c.activo ? "success" : "error"}>
+                        {isOrphan ? "Pendiente" : c.activo ? "Activo" : "Inactivo"}
+                      </Badge>
+                    </TableCell>
 
-                  <TableCell className="px-4 py-3 text-gray-600 text-start text-theme-sm dark:text-gray-400">
-                    {c.contacto?.telefono || "—"}
-                  </TableCell>
-
-                  <TableCell className="px-4 py-3 text-start">
-                    <Badge size="sm" color={c.activo ? "success" : "error"}>
-                      {c.activo ? "Activo" : "Inactivo"}
-                    </Badge>
-                  </TableCell>
-
-                  <TableCell className="px-4 py-3 text-start">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => nav(`/admin/contratistas/${c.id}`)}
-                        className="px-2 py-1 text-xs rounded-lg border border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5"
-                        title="Ver"
-                      >
-                        Ver
-                      </button>
+                    <TableCell className="px-4 py-3 text-start">
+                      <div className="flex gap-2">
                         <button
-                        onClick={() =>
-                            nav(`/admin/contratistas/${c.id}/editar`, {
-                            state: { branchId: c.branchId }, // ✅ usar el branch del contratista
-                            })
-                        }
-                        className="px-2 py-1 text-xs rounded-lg border border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5"
-                        title="Editar"
+                          onClick={() => handleView(c)}
+                          disabled={isOrphan}
+                          className="px-2 py-1 text-xs rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-60 disabled:pointer-events-none dark:border-gray-700 dark:hover:bg-white/5"
+                          title={isOrphan ? "Sin detalle: aún no tiene sucursal" : "Ver"}
                         >
-                        Editar
+                          Ver
                         </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+
+                        {/* ✅ Mantengo el botón de Editar */}
+                        <button
+                          onClick={() => handleEdit(c)}
+                          className="px-2 py-1 text-xs rounded-lg border border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5"
+                          title={isOrphan ? "Asignar a sucursal / completar registro" : "Editar"}
+                        >
+                          Editar
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

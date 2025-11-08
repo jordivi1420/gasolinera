@@ -1,14 +1,14 @@
 // src/pages/admin/sucursales/SucursalesTable.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ShootingStarIcon, PencilIcon } from "../../../../icons"; // ← usa tu set de íconos
+import { ShootingStarIcon, PencilIcon } from "../../../../icons";
 import {
   Table,
   TableHeader,
   TableBody,
   TableRow,
   TableCell,
-} from "../../../../components/ui/table"; // ← ajusta la ruta a donde definiste tu tabla
+} from "../../../../components/ui/table";
 import {
   fetchSucursalesPage,
   type SucursalRow,
@@ -23,12 +23,9 @@ export default function SucursalesTable() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
-  // Historial de cursores para paginar hacia atrás/adelante
-  // history[0] = primera página (sin startKey), luego vamos agregando nextStartKey
+  // Paginación por cursores
   const [history, setHistory] = useState<Array<string | undefined>>([undefined]);
   const [cursorIdx, setCursorIdx] = useState(0);
-
-  // Guardamos el último nextStartKey devuelto para el cursor actual
   const nextKeyRef = useRef<string | undefined>(undefined);
 
   async function loadPage(startKey: string | undefined) {
@@ -36,15 +33,14 @@ export default function SucursalesTable() {
     try {
       const { rows, nextStartKey } = await fetchSucursalesPage(startKey);
       setRows(rows);
-      nextKeyRef.current = nextStartKey; // el "Siguiente" de ESTA página
+      nextKeyRef.current = nextStartKey;
     } finally {
       setLoading(false);
     }
   }
 
-  // Cargar primera página
   useEffect(() => {
-    loadPage(history[0]); // undefined
+    loadPage(history[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -66,14 +62,13 @@ export default function SucursalesTable() {
     if (!canGoPrev) return;
     const newIdx = cursorIdx - 1;
     setCursorIdx(newIdx);
-    const prevKey = history[newIdx]; // puede ser undefined si es la primera
-    loadPage(prevKey);
+    loadPage(history[newIdx]);
   };
 
   const goNext = () => {
     if (!canGoNext) return;
     const nextKey = nextKeyRef.current!;
-    const newHistory = history.slice(0, cursorIdx + 1); // cortamos cualquier "futuro"
+    const newHistory = history.slice(0, cursorIdx + 1);
     newHistory.push(nextKey);
     setHistory(newHistory);
     const newIdx = cursorIdx + 1;
@@ -163,15 +158,41 @@ export default function SucursalesTable() {
                       {r.activa ? "Activa" : "Inactiva"}
                     </span>
                   </TableCell>
+
                   <TableCell className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => navigate(`/admin/sucursales/${r.id}/editar`)}
-                      className="inline-flex items-center gap-2 px-2 py-1 text-xs font-medium border rounded-lg border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5"
-                      title="Editar"
-                    >
-                      <PencilIcon className="w-4 h-4" />
-                      Editar
-                    </button>
+                    <div className="inline-flex items-center gap-2">
+                      {/* Gestionar (tabs de la sucursal) */}
+                      <button
+                        onClick={() => navigate(`/admin/sucursales/${r.id}/gestionar`)}
+                        className="
+                          inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold
+                          rounded-lg border border-brand-600 bg-brand-600 text-white
+                          hover:bg-brand-700 hover:border-brand-700
+                        "
+                        title="Gestionar sucursal"
+                      >
+                        Gestionar
+                      </button>
+
+                      {/* Ver */}
+                      <button
+                        onClick={() => navigate(`/admin/sucursales/${r.id}`)}
+                        className="inline-flex items-center gap-2 px-2 py-1 text-xs font-medium border rounded-lg border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5"
+                        title="Ver"
+                      >
+                        Ver
+                      </button>
+
+                      {/* Editar */}
+                      <button
+                        onClick={() => navigate(`/admin/sucursales/${r.id}/editar`)}
+                        className="inline-flex items-center gap-2 px-2 py-1 text-xs font-medium border rounded-lg border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg白/5"
+                        title="Editar"
+                      >
+                        <PencilIcon className="w-4 h-4" />
+                        Editar
+                      </button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

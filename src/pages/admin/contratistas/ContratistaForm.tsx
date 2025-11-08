@@ -1,19 +1,24 @@
-// src/pages/admin/contractors/ContractorCreateForm.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import ComponentCard from "../../../components/common/ComponentCard";
 import Label from "../../../components/form/Label";
 import Input from "../../../components/form/input/InputField";
-import Select from "../../../components/form/Select";
 import Button from "../../../components/ui/button/Button";
 
 import { useAuth } from "../../../context/AuthContext";
 import { listSucursales } from "../../../services/sucursales.service";
 import {
   createContratista,
+  createContractorAuthOnly,
   getContratista,
   updateContratista,
   type Contractor,
+  listBranchIdsForContratista,
+  getPendingContratista,
+  updatePendingContratista,
+  createOrUpdatePendingContractor,
+  deletePendingContratista,
+  removeContratistaFromBranch,   // 👈 NUEVO
 } from "../../../services/contratistas.service";
 
 type SucursalOpt = { id: string; nombre: string };
@@ -22,31 +27,33 @@ export default function ContractorCreateForm() {
   const navigate = useNavigate();
   const location = useLocation() as { state?: { branchId?: string } };
   const params = useParams<{ id?: string }>();
-  const contractorId = params.id || "";            // vacío si es crear
-  const isEdit = !!contractorId;                   // modo edición
+  const contractorId = params.id || "";
+  const isEdit = !!contractorId;
   const { user, profile } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
-  // form
   const [branchId, setBranchId] = useState("");
+  const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
+  const [selectedBranchesEdit, setSelectedBranchesEdit] = useState<string[]>([]);
+  const [existingBranchesEdit, setExistingBranchesEdit] = useState<string[]>([]); // 👈 ORIGINAL
+
   const [nombre, setNombre] = useState("");
   const [nit, setNit] = useState("");
   const [contactoNombre, setContactoNombre] = useState("");
   const [telefono, setTelefono] = useState("");
-  const [emailLogin, setEmailLogin] = useState("");     // contacto.email
+  const [emailLogin, setEmailLogin] = useState("");
   const [activo, setActivo] = useState(true);
+  const [adminUid, setAdminUid] = useState<string | undefined>(undefined);
 
-  // credenciales opcionales (solo si quieres crearlas al crear)
   const [passwordLogin, setPasswordLogin] = useState("");
   const [password2, setPassword2] = useState("");
 
-  // sucursales para el select
   const [sucursales, setSucursales] = useState<SucursalOpt[]>([]);
+  const [isEditPending, setIsEditPending] = useState(false);
 
-  // 1) Cargar sucursales
   useEffect(() => {
     (async () => {
       try {
@@ -56,41 +63,41 @@ export default function ContractorCreateForm() {
           .sort((a, b) => a.nombre.localeCompare(b.nombre));
         setSucursales(mapped);
 
-        // branch base: del state, o del perfil si no es admin global
+        if (!isEdit) return;
+
+        const { branchIds } = await listBranchIdsForContratista(contractorId);
+
+        if (branchIds.length === 0) {
+          setIsEditPending(true);
+          const pend = await getPendingContratista(contractorId);
+          if (!pend) {
+            setErr("No se encontró el contratista pendiente.");
+            return;
+          }
+          setNombre(pend.nombre || "");
+          setNit(pend.nit || "");
+          setContactoNombre(pend.contacto?.nombre || "");
+          setTelefono(pend.contacto?.telefono || "");
+          setEmailLogin(pend.contacto?.email || "");
+          setActivo(pend.activo ?? true);
+          setAdminUid(pend.admin_uid);
+          setSelectedBranchesEdit([]); // podrá elegir asignaciones
+          setExistingBranchesEdit([]); // original: ninguna
+          return;
+        }
+
+        setIsEditPending(false);
         const incomingBranch =
-          location.state?.branchId ??
-          (!profile?.is_global_admin ? profile?.branchId : "");
+          location.state?.branchId ?? (!profile?.is_global_admin ? profile?.branchId : "");
+        const effectiveBranchId =
+          incomingBranch && branchIds.includes(incomingBranch)
+            ? incomingBranch
+            : branchIds[0];
 
-        if (incomingBranch) setBranchId(incomingBranch);
-      } catch (e) {
-        setErr("No se pudieron cargar las sucursales.");
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+        setBranchId(effectiveBranchId);
+        setSelectedBranchesEdit(branchIds);
+        setExistingBranchesEdit(branchIds); // 👈 guardamos las originales
 
-  const sucursalOptions = useMemo(
-    () => sucursales.map((s) => ({ value: s.id, label: s.nombre })),
-    [sucursales]
-  );
-
-  // 2) Si es edición, cargar datos del contratista
-  useEffect(() => {
-    if (!isEdit) return;
-
-    // Para editar NECESITAMOS el branchId correcto
-    //  - intentamos: state.branchId (desde la tabla)
-    //  - fallback: branchId ya seteado por perfil
-    const effectiveBranchId =
-      location.state?.branchId || branchId || profile?.branchId || "";
-
-    if (!effectiveBranchId) {
-      setErr("No se pudo determinar la sucursal del contratista.");
-      return;
-    }
-
-    (async () => {
-      try {
         setLoading(true);
         const data = await getContratista(effectiveBranchId, contractorId);
         if (!data) {
@@ -98,16 +105,15 @@ export default function ContractorCreateForm() {
           return;
         }
 
-        // Rellenar form
-        setBranchId(effectiveBranchId);
         setNombre(data.nombre || "");
         setNit(data.nit || "");
         setContactoNombre(data.contacto?.nombre || "");
         setTelefono(data.contacto?.telefono || "");
         setEmailLogin(data.contacto?.email || "");
         setActivo(data.activo ?? true);
-      } catch (e) {
-        setErr("No se pudo cargar el contratista.");
+        setAdminUid(data.admin_uid);
+      } catch {
+        setErr("No se pudieron cargar los datos.");
       } finally {
         setLoading(false);
       }
@@ -115,34 +121,113 @@ export default function ContractorCreateForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEdit, contractorId]);
 
+  
+
+  function toggleBranch(id: string) {
+    setSelectedBranches((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+  function toggleBranchEdit(id: string) {
+    if (!isEditPending && id === branchId) return; // no desmarcar la actual
+    setSelectedBranchesEdit((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
     setOk(null);
 
-    if (!user?.uid) {
-      setErr("No has iniciado sesión.");
+    if (!user?.uid) return setErr("No has iniciado sesión.");
+    if (!nombre.trim()) return setErr("Ingresa el nombre del contratista.");
+
+    /* ───────────── CREACIÓN ───────────── */
+    if (!isEdit) {
+      const wantsCredentials =
+        emailLogin.trim().length > 0 || passwordLogin.length > 0 || password2.length > 0;
+
+      if (wantsCredentials) {
+        if (!emailLogin.trim()) return setErr("Ingresa el correo de acceso del contratista.");
+        if (passwordLogin.length < 6)
+          return setErr("La contraseña debe tener al menos 6 caracteres.");
+        if (passwordLogin !== password2) return setErr("Las contraseñas no coinciden.");
+      }
+
+      setLoading(true);
+      try {
+        const baseContact = {
+          nombre: contactoNombre || "",
+          telefono: telefono || "",
+          email: emailLogin || "",
+        };
+
+        if (selectedBranches.length === 0) {
+          const res = await createContractorAuthOnly({
+            email: emailLogin.trim().toLowerCase(),
+            password: passwordLogin || "123456",
+            displayName: nombre.trim(),
+            created_by: user.uid,
+            nit: nit.trim(),
+            contacto: baseContact,
+          });
+
+          await createOrUpdatePendingContractor(res.contractorId, {
+            nombre: nombre.trim(),
+            nit: nit.trim(),
+            activo,
+            contacto: baseContact,
+            creado_por: user.uid,
+            actualizado_por: user.uid,
+            admin_uid: res.uid,
+          });
+
+          navigate("/admin/contratistas", { replace: true });
+          return;
+        }
+
+        const [first, ...rest] = selectedBranches;
+        const created = await createContratista(first, {
+          nombre: nombre.trim(),
+          nit: nit.trim(),
+          activo,
+          contacto: baseContact,
+          creado_por: user.uid,
+          adminEmail: emailLogin.trim() || undefined,
+          adminPassword: wantsCredentials ? passwordLogin : undefined,
+        } as any);
+
+        const forcedId = created.id;
+        if (rest.length) {
+          await Promise.all(
+            rest.map((b) =>
+              createContratista(b, {
+                nombre: nombre.trim(),
+                nit: nit.trim(),
+                activo,
+                contacto: baseContact,
+                creado_por: user.uid,
+                id: forcedId,
+              } as any)
+            )
+          );
+        }
+
+        navigate("/admin/contratistas", { replace: true });
+      } catch (e: any) {
+        setErr(e?.message || "No se pudo crear el contratista.");
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
-    // validaciones mínimas
-    if (!branchId) return setErr("Selecciona una sucursal.");
-    if (!nombre.trim()) return setErr("Ingresa el nombre del contratista.");
-
-    // Si estás creando y vas a crear credenciales, valida
-    const willCreateAuth =
-      !isEdit && (emailLogin.trim().length > 0 || passwordLogin.length > 0 || password2.length > 0);
-
-    if (willCreateAuth) {
-      if (!emailLogin.trim()) return setErr("Ingresa el correo de acceso del contratista.");
-      if (passwordLogin.length < 6) return setErr("La contraseña debe tener al menos 6 caracteres.");
-      if (passwordLogin !== password2) return setErr("Las contraseñas no coinciden.");
-    }
-
+    /* ───────────── EDICIÓN ───────────── */
     setLoading(true);
     try {
-      if (isEdit) {
-        // ✅ EDITAR
+      // PENDIENTE (sin sucursal)
+      if (isEditPending) {
         const patch: Partial<Contractor> = {
           nombre: nombre.trim(),
           nit: nit.trim(),
@@ -154,66 +239,190 @@ export default function ContractorCreateForm() {
           },
         };
 
-        await updateContratista(branchId, contractorId, {
+        if (selectedBranchesEdit.length === 0) {
+          await updatePendingContratista(contractorId, {
+            ...patch,
+            actualizado_por: user.uid,
+          });
+          navigate("/admin/contratistas", { replace: true });
+          return;
+        }
+
+        if (!adminUid) {
+          setErr("No se encontró el usuario administrador (admin_uid).");
+          setLoading(false);
+          return;
+        }
+
+        const [first, ...rest] = selectedBranchesEdit;
+        const basePayload = {
           ...patch,
-          actualizado_por: user.uid,
-        });
-
-        setOk("Contratista actualizado correctamente.");
-      } else {
-        // ✅ CREAR
-        await createContratista(branchId, {
-          nombre: nombre.trim(),
-          nit: nit.trim(),
-          activo,
-          contacto: {
-            nombre: contactoNombre || "",
-            telefono: telefono || "",
-            email: emailLogin || "",
-          },
           creado_por: user.uid,
-        });
+          admin_uid: adminUid,
+          id: contractorId,
+        } as any;
 
-        setOk("Contratista creado correctamente.");
+        await createContratista(first, basePayload);
+
+        if (rest.length) {
+          await Promise.all(
+            rest.map((b) =>
+              createContratista(b, {
+                ...patch,
+                creado_por: user.uid,
+                admin_uid: adminUid,
+                id: contractorId,
+              } as any)
+            )
+          );
+        }
+
+        await deletePendingContratista(contractorId);
+
+        navigate("/admin/contratistas", { replace: true });
+        return;
       }
 
-      // Regresar al listado
+      // NORMAL (con sucursal)
+      if (!branchId) return setErr("Selecciona la sucursal (obligatorio en edición).");
+
+      const patch: Partial<Contractor> = {
+        nombre: nombre.trim(),
+        nit: nit.trim(),
+        activo,
+        contacto: {
+          nombre: contactoNombre || "",
+          telefono: telefono || "",
+          email: emailLogin || "",
+        },
+      };
+
+      await updateContratista(branchId, contractorId, {
+        ...patch,
+        actualizado_por: user.uid,
+      });
+
+      // ➕ agregar y ➖ quitar en base a la comparación con las originales
+      const toAdd = selectedBranchesEdit.filter(
+        (b) => b !== branchId && !existingBranchesEdit.includes(b)
+      );
+      const toRemove = existingBranchesEdit.filter(
+        (b) => b !== branchId && !selectedBranchesEdit.includes(b)
+      );
+
+      await Promise.all([
+        ...toAdd.map((b) =>
+          createContratista(b, {
+            ...patch,
+            creado_por: user.uid,
+            id: contractorId,
+            adminEmail: undefined,
+            adminPassword: undefined,
+            admin_uid: adminUid,
+          } as any)
+        ),
+        ...toRemove.map((b) => removeContratistaFromBranch(b, contractorId)),
+      ]);
+
+      // Actualizamos el "original" para futuras ediciones sin refrescar
+      setExistingBranchesEdit(selectedBranchesEdit);
+
       navigate("/admin/contratistas", { replace: true });
     } catch (e: any) {
-      console.error(e);
-      setErr(e?.message || (isEdit ? "No se pudo actualizar el contratista." : "No se pudo crear el contratista."));
+      setErr(e?.message || "No se pudo actualizar el contratista.");
     } finally {
       setLoading(false);
     }
   }
 
-  function handleCancel() {
-    navigate("/admin/contratistas");
-  }
+ 
 
-  // Encontrar etiqueta de sucursal para mostrar
   const sucursalActual = sucursales.find((s) => s.id === branchId)?.nombre || "";
 
   return (
-    <ComponentCard title={isEdit ? "Editar contratista" : "Nuevo contratista"}>
+    <ComponentCard title={isEdit ? (isEditPending ? "Editar contratista (sin sucursal)" : "Editar contratista") : "Nuevo contratista"}>
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Sucursal */}
+        {/* Sucursales */}
         <div>
-          <Label>Sucursal *</Label>
+          <Label>
+            {isEdit
+              ? (isEditPending
+                  ? "Este contratista aún no tiene sucursal. Puedes asignarlo (opcional) seleccionando abajo."
+                  : "Sucursales (puedes agregar o quitar)")
+              : "Sucursales (opcional, puedes seleccionar varias)"}
+          </Label>
 
-          {/* En edición mostramos la actual y permitimos cambiar si quieres */}
-          {isEdit && sucursalActual && (
-            <p className="text-xs text-gray-500 mb-1">Sucursal actual: <b>{sucursalActual}</b></p>
+          {!isEdit && (
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {sucursales.map((s) => (
+                <label key={s.id} className="flex items-center gap-2 rounded-lg border p-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedBranches.includes(s.id)}
+                    onChange={() => toggleBranch(s.id)}
+                  />
+                  <span>{s.nombre}</span>
+                </label>
+              ))}
+              {sucursales.length === 0 && (
+                <p className="text-xs text-gray-500">No hay sucursales disponibles.</p>
+              )}
+            </div>
           )}
 
-          <Select
-            options={sucursalOptions}
-            placeholder={isEdit && sucursalActual ? `Cambiar sucursal (actual: ${sucursalActual})` : "Selecciona la sucursal"}
-            onChange={(val: string) => setBranchId(val)}
-            className="dark:bg-dark-900"
-            // Si tu Select no es controlable, el placeholder mostrará la actual.
-            // Si sí acepta 'value', podrías usar: value={branchId}
-          />
+          {isEdit && isEditPending && (
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {sucursales.map((s) => {
+                const checked = selectedBranchesEdit.includes(s.id);
+                return (
+                  <label key={s.id} className="flex items-center gap-2 rounded-lg border p-2">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleBranchEdit(s.id)}
+                    />
+                    <span>{s.nombre}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          {isEdit && !isEditPending && (
+            <>
+              {sucursalActual && (
+                <p className="text-xs text-gray-500 mb-2">
+                  Sucursal actual: <b>{sucursalActual}</b> (no se puede desmarcar aquí)
+                </p>
+              )}
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {sucursales.map((s) => {
+                  const isCurrent = s.id === branchId;
+                  const checked = selectedBranchesEdit.includes(s.id) || isCurrent;
+                  return (
+                    <label key={s.id} className="flex items-center gap-2 rounded-lg border p-2">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={isCurrent}
+                        onChange={() => toggleBranchEdit(s.id)}
+                      />
+                      <span>
+                        {s.nombre}
+                        {isCurrent && <span className="ml-1 text-xs text-gray-500">(actual)</span>}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {!isEdit && (
+            <p className="mt-1 text-xs text-gray-500">
+              Si no seleccionas ninguna sucursal, podrás editarlo sin sucursal y asignarlo luego.
+            </p>
+          )}
         </div>
 
         {/* Datos del contratista */}
@@ -245,7 +454,7 @@ export default function ContractorCreateForm() {
           </div>
         </div>
 
-        {/* Credenciales (opcional) - solo usa al CREAR */}
+        {/* Credenciales (solo creación) */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <Label>Correo de acceso (opcional)</Label>
@@ -254,6 +463,7 @@ export default function ContractorCreateForm() {
               value={emailLogin}
               onChange={(e: any) => setEmailLogin(e.target.value)}
               placeholder="admin@contratista.com"
+              disabled={isEdit}
             />
           </div>
           <div>
@@ -263,7 +473,7 @@ export default function ContractorCreateForm() {
               value={passwordLogin}
               onChange={(e: any) => setPasswordLogin(e.target.value)}
               placeholder="********"
-              disabled={isEdit} // normalmente no se cambia aquí al editar
+              disabled={isEdit}
             />
           </div>
           <div>
@@ -280,15 +490,16 @@ export default function ContractorCreateForm() {
 
         {err && <p className="text-sm text-red-600">{err}</p>}
         {ok && <p className="text-sm text-green-600">{ok}</p>}
-
         <div className="flex gap-3">
-          <Button disabled={loading} className="px-5">
-            {loading ? (isEdit ? "Guardando..." : "Creando...") : (isEdit ? "Guardar cambios" : "Crear contratista")}
+          <Button type="submit" disabled={loading} className="px-5">
+            {loading
+              ? isEdit ? "Guardando..." : "Creando..."
+              : isEdit ? "Guardar cambios" : "Crear contratista"}
           </Button>
           <button
             type="button"
             className="px-5 bg-gray-100 dark:bg-white/10 rounded-lg border"
-            onClick={handleCancel}
+            onClick={() => navigate("/admin/contratistas")}
           >
             Cancelar
           </button>

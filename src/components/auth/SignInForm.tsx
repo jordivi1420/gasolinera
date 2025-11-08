@@ -4,8 +4,6 @@ import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "../../icons";
 import Label from "../form/Label";
 import Input from "../form/input/InputField";
 import Checkbox from "../form/input/Checkbox";
-// Puedes seguir usando tu Button para otros botones, pero NO para el submit aquí.
-// import Button from "../ui/button/Button";
 
 import { auth, rtdb } from "../../config/firebase";
 import {
@@ -13,7 +11,6 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   signInWithEmailAndPassword,
- 
 } from "firebase/auth";
 import { ref, get } from "firebase/database";
 
@@ -30,7 +27,7 @@ type Profile = {
   role: Role;
   branchId?: string | null;
   contractorId?: string | null;
-  status?: "active" | "inactive" | string;
+  status?: "active" | "inactive" | "pending" | string;
   displayName?: string;
   email?: string;
 };
@@ -52,13 +49,8 @@ export default function SignInForm() {
     return snap.exists() ? (snap.val() as Profile) : null;
   }
 
-  function goAfterLogin(profile: Profile | null) {
+  function goAfterLogin(profile: Profile) {
     const cameFromRoot = from === "/" || from === "/signin";
-
-    if (!profile) {
-      navigate("/no-perfil", { replace: true });
-      return;
-    }
 
     if (profile.is_global_admin === true) {
       navigate(cameFromRoot ? "/admin/sucursales" : from, { replace: true });
@@ -84,9 +76,10 @@ export default function SignInForm() {
         navigate(cameFromRoot ? "/" : from, { replace: true });
         return;
       }
-      default:
+      default: {
         navigate(from, { replace: true });
         return;
+      }
     }
   }
 
@@ -99,13 +92,33 @@ export default function SignInForm() {
       const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
       const profile = await fetchProfile(cred.user.uid);
 
-      if (profile?.status && profile.status !== "active") {
-        setErrMsg("Tu usuario está inactivo. Habla con el administrador.");
+      if (!profile) {
+        setErrMsg("No existe perfil asociado a este usuario.");
         setLoading(false);
         return;
       }
 
-      goAfterLogin(profile);
+      const isContractor =
+        profile.role === "contractor_admin" || profile.role === "contractor_user";
+
+      // Reglas de estado:
+      // - Contratista: permitir "active" y "pending"; bloquear "inactive".
+      // - Resto de roles: exigir "active".
+      if (isContractor) {
+        if (profile.status === "inactive") {
+          setErrMsg("Tu usuario de contratista está inactivo. Contacta al administrador.");
+          setLoading(false);
+          return;
+        }
+        goAfterLogin(profile);
+      } else {
+        if (profile.status && profile.status !== "active") {
+          setErrMsg("Tu usuario está inactivo. Habla con el administrador.");
+          setLoading(false);
+          return;
+        }
+        goAfterLogin(profile);
+      }
     } catch (err: any) {
       const code = String(err?.code || "");
       let msg = "No se pudo iniciar sesión. Verifica tus datos.";
@@ -118,8 +131,6 @@ export default function SignInForm() {
       setLoading(false);
     }
   }
-
-  
 
   return (
     <div className="flex flex-col flex-1">
@@ -196,16 +207,6 @@ export default function SignInForm() {
                       Mantener sesión iniciada
                     </span>
                   </div>
-
-                  {/* Si vas a usar Google: */}
-                  {/* <button
-                    type="button"
-                    onClick={handleGoogleSignIn}
-                    className="h-9 rounded-md border px-3 text-sm transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/10"
-                    disabled={loading}
-                  >
-                    Iniciar con Google
-                  </button> */}
                 </div>
 
                 {errMsg && (
@@ -215,7 +216,6 @@ export default function SignInForm() {
                 )}
 
                 <div>
-                  {/* Botón nativo para evitar el error de typing con tu Button personalizado */}
                   <button
                     type="submit"
                     className="w-full h-9 rounded-md bg-blue-600 px-4 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-70 disabled:pointer-events-none"
@@ -228,9 +228,7 @@ export default function SignInForm() {
               </div>
             </form>
 
-            <div className="mt-5">
-              {/* Espacio para links extra, recuperación, etc. */}
-            </div>
+            <div className="mt-5" />
           </div>
         </div>
       </div>
