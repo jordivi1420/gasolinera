@@ -275,7 +275,11 @@ export default function SucursalForm() {
         )}
 
         <div className="flex gap-3">
-          <Button disabled={loading || submitting || !profile?. is_global_admin} className="px-5">
+          <Button
+            type="submit"
+            disabled={loading || submitting || !profile?.is_global_admin}
+            className="px-5"
+          >
             {submitting ? "Guardando..." : "Guardar"}
           </Button>
           <button

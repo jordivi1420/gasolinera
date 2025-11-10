@@ -1,5 +1,6 @@
+// src/pages/admin/sucursales/manage/ContratistasPage.tsx
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   listContratistasByBranch,
   toggleContratistaActivo,
@@ -27,6 +28,7 @@ const HEADERS = ["Contratista", "NIT", "Contacto", "Teléfono", "Estado", "Accio
 
 export default function ContratistasPage() {
   const { sucursalId } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   const [rows, setRows] = useState<ContratistaRow[]>([]);
@@ -61,7 +63,6 @@ export default function ContratistasPage() {
         hint: c.contacto?.email || c.nit || "",
         meta: c,
       }));
-      // Orden por nombre
       mapped.sort((a, b) => a.label.localeCompare(b.label));
       setCandidates(mapped);
     } finally {
@@ -119,12 +120,14 @@ export default function ContratistasPage() {
         email: base.contacto?.email || item.hint || "",
       },
       creado_por: user?.uid || "admin-ui",
-      // si el sample trae admin_uid, se preserva
-      admin_uid: (base as any)?.admin_uid,
+      admin_uid: (base as any)?.admin_uid, // preserva admin_uid si viene del sample
     } as any);
 
     await Promise.all([loadRows(), loadCandidates()]);
   }
+
+  // Ir a gestionar centros del contratista (en el layout de la sucursal)
+
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -265,6 +268,16 @@ export default function ContratistasPage() {
                         title={r.activo ? "Desactivar" : "Activar"}
                       >
                         {r.activo ? "Desactivar" : "Activar"}
+                      </button>
+
+                      <button
+                        // En tu ContratistasPage o ContractorsTable donde está el botón Gestionar:
+                        onClick={() => navigate(`/admin/sucursales/${sucursalId}/contratistas/${r.id}/centros`)}
+
+                        className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border border-brand-600 bg-brand-600 text-white hover:bg-brand-700 hover:border-brand-700"
+                        title="Gestionar centros del contratista"
+                      >
+                        Gestionar
                       </button>
 
                       <button

@@ -20,6 +20,8 @@ import ContratistasPage from "./pages/admin/sucursales/manage/ContratistasPage";
 import UsuariosPage from "./pages/admin/sucursales/manage/UsuariosPage";
 import ReportesPage from "./pages/admin/sucursales/manage/ReportesPage";
 import SucursalManageLayout from "./pages/admin/sucursales/manage/SucursalManageLayout";
+import CentrosPage from "./pages/admin/contratistas/centros/CentrosPage";
+
 
 
 import AdminContratistasPage from "./pages/admin/contratistas/AdminContratistasPage";
@@ -99,6 +101,8 @@ export default function App() {
                   <Route path="/admin/contratistas" element={<AdminContratistasPage />} />
                   <Route path="/admin/contratistas/nueva" element={<ContratistaForm />} />
                   <Route path="/admin/contratistas/:id/editar" element={<ContratistaForm />} />
+
+                  <Route path="/admin/sucursales/:sucursalId/contratistas/:contractorId/centros" element={<CentrosPage />}/>
                 </Route>
 
                 {/* Área contratistas */}
