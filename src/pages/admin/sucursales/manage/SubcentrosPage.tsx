@@ -29,9 +29,7 @@ export default function SubcentrosPage() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold">Subcentros</h3>
-        <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5">
-          + Agregar subcentro
-        </button>
+
       </div>
 
       {loading ? (

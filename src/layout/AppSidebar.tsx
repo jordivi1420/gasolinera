@@ -36,13 +36,16 @@ const AppSidebar: React.FC = () => {
 
   // ── Menús dinámicos según rol
   const navItems: NavItem[] = isAdminGlobal
+  
     ? [
+        { icon: <CalenderIcon />, name: "Panel", path: `/` },
         { icon: <CalenderIcon />, name: "Sucursales", path: "/admin/sucursales" },
         { icon: <CalenderIcon />, name: "Contratistas", path: "/admin/contratistas" },
       ]
     : isContractor
     ? [
-        { icon: <CalenderIcon />, name: "Dashboard", path: `${contractorBase}/dashboard` },
+        { icon: <CalenderIcon />, name: "Panel", path: `/` },
+        { icon: <CalenderIcon />, name: "Sucursales", path: `${contractorBase}/sucursales` },
         { icon: <CalenderIcon />, name: "cositas", path: `${contractorBase}/reportes` },
       ]
     : [

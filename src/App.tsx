@@ -21,6 +21,15 @@ import UsuariosPage from "./pages/admin/sucursales/manage/UsuariosPage";
 import ReportesPage from "./pages/admin/sucursales/manage/ReportesPage";
 import SucursalManageLayout from "./pages/admin/sucursales/manage/SucursalManageLayout";
 import CentrosPage from "./pages/admin/contratistas/centros/CentrosPage";
+import CentrosContratistaPage from "./pages/contratista/sucursales/centros/CentrosPage";
+import AdminSubcentrospage from "./pages/admin/contratistas/centros/subcentros/SubcentrosPage"
+import SubcentrosContratistaPage from "./pages/contratista/sucursales/centros/subcentros/SubcentrosPage";
+import CentroManageLayout from "./pages/contratista/sucursales/centros/subcentros/manage/CentroManageLayout";
+import Empleados from "./pages/contratista/sucursales/centros/subcentros/manage/Empleados";
+import Vehiculos from "./pages/contratista/sucursales/centros/subcentros/manage/Vehiculos";
+
+import VehiculosTable from "./pages/contratista/sucursales/centros/subcentros/manage/Components/VehiculoTable";
+import VehiculoForm from "./pages/contratista/sucursales/centros/subcentros/manage/Components/VehiculoForm";
 
 
 
@@ -101,15 +110,38 @@ export default function App() {
                   <Route path="/admin/contratistas" element={<AdminContratistasPage />} />
                   <Route path="/admin/contratistas/nueva" element={<ContratistaForm />} />
                   <Route path="/admin/contratistas/:id/editar" element={<ContratistaForm />} />
+                  <Route path="/admin/sucursales/:sucursalId/contratistas/:contractorId/centros"element={<CentrosPage />}/>
 
-                  <Route path="/admin/sucursales/:sucursalId/contratistas/:contractorId/centros" element={<CentrosPage />}/>
+                  <Route path="/admin/sucursales/:sucursalId/contratistas/:contractorId/centros/:centroId/subcentros"element={<AdminSubcentrospage />}/>
+
                 </Route>
 
                 {/* Área contratistas */}
                 <Route element={<RequireContractor />}>
-                  <Route path="/c/:branchId/:contractorId/dashboard" element={<ContratistaSucursalesPage />} />
+                  <Route path="/c/:branchId/:contractorId/sucursales" element={<ContratistaSucursalesPage />} />
                   <Route path="/c/:branchId/:contractorId/perfil" element={<UserProfiles />} />
                   <Route path="/c/:branchId/:contractorId/reportes" element={<ReportsPlaceholder />} />
+                  <Route path="/c/:branchId/:contractorId/centros" element={<CentrosContratistaPage />} />
+                  <Route path="/c/:branchId/:contractorId/centros/:centroId/subcentros" element={<SubcentrosContratistaPage />}/>
+                  
+                  <Route
+                    path="/c/:branchId/:contractorId/centros/:centroId/subcentros/:subcentroId/vehiculos" element={<VehiculosTable />} />
+
+                  <Route path="/c/:branchId/:contractorId/centros/:centroId/subcentros/:subcentroId/vehiculos/nuevo" element={<VehiculoForm />} />
+
+                  <Route path="/c/:branchId/:contractorId/centros/:centroId/subcentros/:subcentroId/vehiculos/:vehiculoId" element={<VehiculoForm />}/>
+
+                  <Route path="/c/:branchId/:contractorId/centros/:centroId/subcentros/:subcentroId/vehiculos/:vehiculoId/editar"element={<VehiculoForm />}/>
+                <Route
+                  path="/c/:branchId/:contractorId/centros/:centroId/subcentros/:subcentroId/manage"
+                  element={<CentroManageLayout />}
+                >
+                  <Route index element={<Navigate to="empleados" replace />} />
+                  <Route path="empleados" element={<Empleados />} />
+                  <Route path="vehiculos" element={<Vehiculos />} />
+                  <Route path="reportes" element={<ReportesPage />} />
+                </Route>
+                  
                 </Route>
               </Route>
             </Route>

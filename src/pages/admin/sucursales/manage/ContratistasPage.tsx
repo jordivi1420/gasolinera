@@ -3,13 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   listContratistasByBranch,
-  toggleContratistaActivo,
-  removeContratistaFromBranchClean,
+  
   type ContratistaRow,
   listAllContratistasUnified,
   getContratistaFromAnyBranch,
   createContratista,
   type Contractor,
+  deletePendingContratista, // 👈 NUEVO
 } from "../../../../services/contratistas.service";
 
 import {
@@ -76,21 +76,9 @@ export default function ContratistasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sucursalId]);
 
-  async function onToggle(id: string, activo: boolean) {
-    if (!sucursalId) return;
-    await toggleContratistaActivo(sucursalId, id, !activo, user?.uid || "admin-ui");
-    await loadRows();
-  }
 
-  async function onRemove(id: string) {
-    if (!sucursalId) return;
-    const ok = confirm(
-      "¿Quitar este contratista de la sucursal? Se limpiarán referencias y, si queda sin sucursales, pasará a 'pendientes'."
-    );
-    if (!ok) return;
-    await removeContratistaFromBranchClean(sucursalId, id);
-    await Promise.all([loadRows(), loadCandidates()]);
-  }
+
+
 
   // Agregar desde Dropdown
   async function onAddContractor(value: string, item: DropdownItem) {
@@ -109,8 +97,9 @@ export default function ContratistasPage() {
         contacto: { email: item.hint || "" },
       } as Partial<Contractor>);
 
+    // 1) Crear / vincular contratista a esta sucursal
     await createContratista(sucursalId, {
-      id: value,
+      id: value, // 👈 usamos el id que viene (uid o id existente)
       nombre: base.nombre || item.label,
       nit: base.nit || "",
       activo: base.activo ?? true,
@@ -123,11 +112,16 @@ export default function ContratistasPage() {
       admin_uid: (base as any)?.admin_uid, // preserva admin_uid si viene del sample
     } as any);
 
+    // 2) Si era huérfano, lo sacamos de contractors_pending
+    try {
+      await deletePendingContratista(value);
+    } catch (e) {
+      console.warn("No se pudo borrar de contractors_pending (puede no existir):", e);
+    }
+
+    // 3) Recargar tabla y lista de candidatos
     await Promise.all([loadRows(), loadCandidates()]);
   }
-
-  // Ir a gestionar centros del contratista (en el layout de la sucursal)
-
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -258,35 +252,18 @@ export default function ContratistasPage() {
                   {/* Acciones */}
                   <TableCell className="px-4 py-3 text-right">
                     <div className="inline-flex items-center gap-2">
-                      <button
-                        onClick={() => onToggle(r.id, r.activo)}
-                        className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border ${
-                          r.activo
-                            ? "border-amber-600 text-amber-800 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-900/20"
-                            : "border-emerald-600 text-emerald-800 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-900/20"
-                        }`}
-                        title={r.activo ? "Desactivar" : "Activar"}
-                      >
-                        {r.activo ? "Desactivar" : "Activar"}
-                      </button>
+
 
                       <button
-                        // En tu ContratistasPage o ContractorsTable donde está el botón Gestionar:
-                        onClick={() => navigate(`/admin/sucursales/${sucursalId}/contratistas/${r.id}/centros`)}
-
+                        onClick={() =>
+                          navigate(`/admin/sucursales/${sucursalId}/contratistas/${r.id}/centros`)
+                        }
                         className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border border-brand-600 bg-brand-600 text-white hover:bg-brand-700 hover:border-brand-700"
                         title="Gestionar centros del contratista"
                       >
                         Gestionar
                       </button>
 
-                      <button
-                        onClick={() => onRemove(r.id)}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-600 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900/20"
-                        title="Quitar de sucursal"
-                      >
-                        Quitar
-                      </button>
                     </div>
                   </TableCell>
                 </TableRow>

@@ -353,19 +353,19 @@ export default function ContractorCreateForm() {
           </Label>
 
           {!isEdit && (
-            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 ">
               {sucursales.map((s) => (
-                <label key={s.id} className="flex items-center gap-2 rounded-lg border p-2">
+                <label key={s.id} className="flex items-center gap-2 rounded-lg border p-2 ">
                   <input
                     type="checkbox"
                     checked={selectedBranches.includes(s.id)}
                     onChange={() => toggleBranch(s.id)}
                   />
-                  <span>{s.nombre}</span>
+                  <span className="text-gray-800 dark:text-white/90" >{s.nombre}</span>
                 </label>
               ))}
               {sucursales.length === 0 && (
-                <p className="text-xs text-gray-500">No hay sucursales disponibles.</p>
+                <p className="text-xs ">No hay sucursales disponibles.</p>
               )}
             </div>
           )}
@@ -381,7 +381,7 @@ export default function ContractorCreateForm() {
                       checked={checked}
                       onChange={() => toggleBranchEdit(s.id)}
                     />
-                    <span>{s.nombre}</span>
+                    <span className="text-gray-800 dark:text-white/90">{s.nombre}</span>
                   </label>
                 );
               })}

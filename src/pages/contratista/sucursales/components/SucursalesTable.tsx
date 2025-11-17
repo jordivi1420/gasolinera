@@ -1,7 +1,7 @@
 // src/pages/admin/sucursales/SucursalesTable.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ShootingStarIcon, PencilIcon } from "../../../../icons";
+import { ShootingStarIcon } from "../../../../icons";
 import {
   Table,
   TableHeader,
@@ -14,21 +14,27 @@ import {
   type SucursalRow,
 } from "../../../../services/sucursales.paging.service";
 import { useAuth } from "../../../../context/AuthContext";
-
-// 🔹 Servicios que reutilizamos para obtener datos reales
-import { listBranchIdsForContratista } from "../../../../services/contratistas.service";
-import { listSucursales } from "../../../../services/sucursales.service";
+import { listSucursalesForCurrentContractor } from "../../../../services/sucursales.contratista.paging.service";
 
 const HEADERS = ["Sucursal", "Departamento", "Municipio", "Estado", "Acciones"];
 
 export default function SucursalesTable() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const auth = useAuth() as any;
+
+  const profile = auth?.profile;
+  const authUser = auth?.user;
 
   const isAdminGlobal = !!profile?.is_global_admin;
   const isContractor =
     profile?.role === "contractor_admin" || profile?.role === "contractor_user";
-  const myContractorId = profile?.contractorId ?? "me";
+
+  const contractorId: string | null = (profile as any)?.contractorId ?? null;
+  const email: string | null = profile?.email ?? authUser?.email ?? null;
+
+  // 🔑 Clave “segura” para la URL del contratista (no usamos el correo)
+  const contractorKey: string =
+    (profile as any)?.contractorId || authUser?.uid || "me";
 
   const [rows, setRows] = useState<SucursalRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +50,7 @@ export default function SucursalesTable() {
     setLoading(true);
     try {
       const { rows, nextStartKey } = await fetchSucursalesPage(startKey);
+      
       setRows(rows);
       nextKeyRef.current = nextStartKey;
     } finally {
@@ -51,34 +58,16 @@ export default function SucursalesTable() {
     }
   }
 
-  /** 🔸 Carga de sucursales visibles para contratista usando servicios reales */
-  async function loadContractorBranches(contractorId: string) {
+  /** Sucursales visibles para contratista (usa contractorId/email y service nuevo) */
+  async function loadContractorBranches() {
     setLoading(true);
     try {
-      // 1) ids de sucursales donde está el contratista
-      const { branchIds } = await listBranchIdsForContratista(contractorId);
-      if (!branchIds.length) {
-        setRows([]);
-        return;
-      }
-
-      // 2) trae TODAS las sucursales con tu servicio oficial
-      const all = await listSucursales(); // [{id, nombre, departamento, municipio, activa, ...}]
-
-      // 3) filtra por ids del contratista y mapea a SucursalRow
-      const setIds = new Set(branchIds);
-      const onlyMine: SucursalRow[] = all
-        .filter((s: any) => setIds.has(s.id))
-        .map((s: any) => ({
-          id: s.id,
-          nombre: String(s.nombre ?? "Sucursal"),
-          departamento: String(s.departamento ?? "-"),
-          municipio: String(s.municipio ?? "-"),
-          activa: Boolean(s.activa ?? true),
-        }))
-        .sort((a, b) => a.nombre.localeCompare(b.nombre));
-
-      setRows(onlyMine);
+      const result = await listSucursalesForCurrentContractor({
+        contractorId,
+        email,
+      });
+      
+      setRows(result);
     } finally {
       setLoading(false);
     }
@@ -86,19 +75,17 @@ export default function SucursalesTable() {
 
   // Decide cómo cargar según rol
   useEffect(() => {
+    
+
     if (isContractor) {
-      if (myContractorId) {
-        loadContractorBranches(myContractorId);
-      } else {
-        setRows([]);
-        setLoading(false);
-      }
+      void loadContractorBranches();
       return;
     }
+
     // Admin global (o demás roles con acceso): paginado normal
-    loadPage(history[0]); // primera página
+    void loadPage(history[0]); // primera página
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isContractor]);
+  }, [isContractor, contractorId, email]);
 
   const filtered = useMemo(() => {
     if (!search.trim() || isContractor) return rows; // sin filtro para contratista
@@ -118,7 +105,7 @@ export default function SucursalesTable() {
     if (!canGoPrev) return;
     const newIdx = cursorIdx - 1;
     setCursorIdx(newIdx);
-    loadPage(history[newIdx]);
+    void loadPage(history[newIdx]);
   };
 
   const goNext = () => {
@@ -129,7 +116,7 @@ export default function SucursalesTable() {
     setHistory(newHistory);
     const newIdx = cursorIdx + 1;
     setCursorIdx(newIdx);
-    loadPage(nextKey);
+    void loadPage(nextKey);
   };
 
   // Header derecho: Admin puede buscar/crear; contratista no.
@@ -145,12 +132,7 @@ export default function SucursalesTable() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button
-          onClick={() => navigate("/admin/sucursales/nueva")}
-          className="inline-flex items-center h-10 px-3 text-sm font-medium text-white rounded-lg bg-brand-500 hover:bg-brand-600"
-        >
-          + Nueva sucursal
-        </button>
+      
       </div>
     ) : null;
 
@@ -206,8 +188,8 @@ export default function SucursalesTable() {
                   <TableCell className="px-4 py-3 text-sm font-medium text-gray-800 dark:text-white/90">
                     {r.nombre}
                   </TableCell>
-                  <TableCell className="px-4 py-3 text-sm">{r.departamento}</TableCell>
-                  <TableCell className="px-4 py-3 text-sm">{r.municipio}</TableCell>
+                  <TableCell className="px-4 py-3 text-sm dark:text-white/90">{r.departamento}</TableCell>
+                  <TableCell className="px-4 py-3 text-sm dark:text-white/90">{r.municipio}</TableCell>
                   <TableCell className="px-4 py-3">
                     <span
                       className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -229,38 +211,18 @@ export default function SucursalesTable() {
                     <div className="inline-flex items-center gap-2">
                       {isAdminGlobal ? (
                         <>
-                          <button
-                            onClick={() => navigate(`/admin/sucursales/${r.id}/gestionar`)}
-                            className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border border-brand-600 bg-brand-600 text-white hover:bg-brand-700 hover:border-brand-700"
-                            title="Gestionar sucursal"
-                          >
-                            Gestionar
-                          </button>
-                          <button
-                            onClick={() => navigate(`/admin/sucursales/${r.id}`)}
-                            className="inline-flex items-center gap-2 px-2 py-1 text-xs font-medium border rounded-lg border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5"
-                            title="Ver"
-                          >
-                            Ver
-                          </button>
-                          <button
-                            onClick={() => navigate(`/admin/sucursales/${r.id}/editar`)}
-                            className="inline-flex items-center gap-2 px-2 py-1 text-xs font-medium border rounded-lg border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5"
-                            title="Editar"
-                          >
-                            <PencilIcon className="w-4 h-4" />
-                            Editar
-                          </button>
+                      
                         </>
                       ) : (
-                        // Contratista → entrar a su área con esta sucursal
+                        // Contratista → entrar a su área con esta sucursal (ya NO usamos el correo)
                         <button
-                          onClick={() => navigate(`/c/${r.id}/${myContractorId}/dashboard`)}
+                          onClick={() => navigate(`/c/${r.id}/${contractorKey}/centros`)}
                           className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border border-brand-600 bg-brand-600 text-white hover:bg-brand-700 hover:border-brand-700"
-                          title="Entrar"
+                          title="Gestionar sucursales"
                         >
-                          Entrar
+                          Gestionar Sucursales
                         </button>
+                        
                       )}
                     </div>
                   </TableCell>

@@ -35,13 +35,32 @@ export type ContractorOrphan = {
   contractorId?: string;
 };
 
+/* ───────────────────── Helper para ordenar sin romper ───────────────────── */
+
+function safeName(x: { nombre?: string; id?: string }) {
+  if (typeof x.nombre === "string" && x.nombre.trim()) {
+    return x.nombre.toLowerCase();
+  }
+  if (x.id) return String(x.id).toLowerCase();
+  return "";
+}
+
+/* ───────────────────── IDs de contratista ───────────────────── */
+
 export function buildContratistaId(nombre: string) {
+  // Solo fallback para contratistas sin usuario (sin admin_uid)
   return `${slugify(nombre)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 /* ───────────────────── Lecturas por sucursal ───────────────────── */
-export async function getContratista(branchId: string, contractorId: string) {
-  const snap = await get(ref(rtdb, `branches/${branchId}/contractors/${contractorId}`));
+
+export async function getContratista(
+  branchId: string,
+  contractorId: string
+) {
+  const snap = await get(
+    ref(rtdb, `branches/${branchId}/contractors/${contractorId}`)
+  );
   if (!snap.exists()) return null;
   const data = snap.val() as Contractor;
   return { ...data, id: contractorId } as Contractor;
@@ -50,26 +69,43 @@ export async function getContratista(branchId: string, contractorId: string) {
 export async function listContractors(branchId: string): Promise<Contractor[]> {
   const snap = await get(ref(rtdb, `branches/${branchId}/contractors`));
   if (!snap.exists()) return [];
+
   const obj = snap.val() as Record<string, Contractor>;
-  const rows: Contractor[] = Object.entries(obj).map(([id, c]) => ({ ...c, id }));
-  return rows.sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const rows: Contractor[] = Object.entries(obj).map(([id, c]) => ({
+    ...c,
+    id,
+  }));
+
+  return rows.sort((a, b) => safeName(a).localeCompare(safeName(b)));
 }
 
 /* ───────────────────── Auth secundaria ───────────────────── */
-async function createAuthUserSecondary(email: string, password: string, displayName?: string) {
+
+async function createAuthUserSecondary(
+  email: string,
+  password: string,
+  displayName?: string
+) {
   const secondary = getSecondaryAuth();
   try {
-    const cred = await createUserWithEmailAndPassword(secondary, email, password);
+    const cred = await createUserWithEmailAndPassword(
+      secondary,
+      email,
+      password
+    );
     if (displayName) await updateProfile(cred.user, { displayName });
     const uid = cred.user.uid;
     await signOutSecondary(secondary);
     return { uid };
   } finally {
-    try { closeSecondaryApp(); } catch {}
+    try {
+      closeSecondaryApp();
+    } catch {}
   }
 }
 
 /* ─────────────── Pendientes (sin sucursal) en /contractors_pending ─────────────── */
+
 export async function createOrUpdatePendingContractor(
   contractorId: string,
   data: Omit<Contractor, "id" | "creado_en" | "creado_por"> & {
@@ -87,7 +123,9 @@ export async function createOrUpdatePendingContractor(
   await set(ref(rtdb, `contractors_pending/${contractorId}`), payload);
 }
 
-export async function getPendingContratista(contractorId: string): Promise<Contractor | null> {
+export async function getPendingContratista(
+  contractorId: string
+): Promise<Contractor | null> {
   const snap = await get(ref(rtdb, `contractors_pending/${contractorId}`));
   if (!snap.exists()) return null;
   const data = snap.val() as Contractor;
@@ -107,7 +145,10 @@ export async function deletePendingContratista(contractorId: string) {
   await remove(ref(rtdb, `contractors_pending/${contractorId}`));
 }
 
-/** SOLO AUTH + pendiente (sin sucursal) */
+/**
+ * SOLO AUTH + pendiente (sin sucursal).
+ * Usa el UID del usuario como contractorId.
+ */
 export async function createContractorAuthOnly(params: {
   email: string;
   password: string;
@@ -123,7 +164,8 @@ export async function createContractorAuthOnly(params: {
     params.displayName
   );
 
-  const contractorId = buildContratistaId(params.displayName);
+  // contractorId = UID del admin del contratista
+  const contractorId = uid;
 
   await update(ref(rtdb), {
     [`users/${uid}`]: {
@@ -133,7 +175,7 @@ export async function createContractorAuthOnly(params: {
       role: "contractor_admin",
       status: "pending",
       branchId: null,
-      contractorId: null,
+      contractorId: null, // se rellena al asignarlo a una sucursal
       created_at: now,
       created_by: params.created_by,
     },
@@ -142,7 +184,8 @@ export async function createContractorAuthOnly(params: {
   await createOrUpdatePendingContractor(contractorId, {
     nombre: params.displayName,
     nit: params.nit || "",
-    contacto: params.contacto || { email: params.email.trim().toLowerCase() },
+    contacto:
+      params.contacto || { email: params.email.trim().toLowerCase() },
     activo: true,
     creado_por: params.created_by,
     actualizado_por: params.created_by,
@@ -153,17 +196,18 @@ export async function createContractorAuthOnly(params: {
 }
 
 /* ───────────────────── Crear/Actualizar en sucursales ───────────────────── */
+
 export async function createContratista(
   branchId: string,
   payload: Omit<Contractor, "id" | "creado_en"> & {
-    id?: string;
+    id?: string; // idealmente = UID del admin (contractorId)
     adminEmail?: string;
     adminPassword?: string;
   }
 ) {
-  const id = payload.id || buildContratistaId(payload.nombre);
   const now = Date.now();
 
+  // 1) Resolver admin_uid
   let admin_uid = payload.admin_uid;
   if (!admin_uid && payload.adminEmail && payload.adminPassword) {
     const { uid } = await createAuthUserSecondary(
@@ -174,11 +218,25 @@ export async function createContratista(
     admin_uid = uid;
   }
 
+  // 2) Resolver id del contratista en RTDB:
+  //    a) payload.id (por ej. desde contractors_pending → UID)
+  //    b) admin_uid (UID del usuario admin)
+  //    c) buildContratistaId (fallback sin usuario)
+  let id = payload.id;
+  if (!id && admin_uid) {
+    id = admin_uid;
+  }
+  if (!id) {
+    id = buildContratistaId(payload.nombre);
+  }
+
   const contractorData = cleanUndefined({
     id,
     nombre: payload.nombre.trim(),
     nit: payload.nit || "",
-    contacto: payload.contacto || (payload.adminEmail ? { email: payload.adminEmail } : {}),
+    contacto:
+      payload.contacto ||
+      (payload.adminEmail ? { email: payload.adminEmail } : {}),
     activo: payload.activo ?? true,
     creado_en: now,
     creado_por: payload.creado_por!,
@@ -187,13 +245,19 @@ export async function createContratista(
     ...(admin_uid ? { admin_uid } : {}),
   }) as Contractor;
 
-  await set(ref(rtdb, `branches/${branchId}/contractors/${id}`), contractorData);
+  // 3) Guardar contratista en la sucursal
+  await set(
+    ref(rtdb, `branches/${branchId}/contractors/${id}`),
+    contractorData
+  );
 
+  // 4) Actualizar referencias de usuario/admin si existe admin_uid
   if (admin_uid) {
     const updates: Record<string, any> = {};
+
     updates[`users/${admin_uid}`] = {
       branchId,
-      contractorId: id,
+      contractorId: id, // mismo id que en contractors
       created_at: now,
       created_by: payload.creado_por!,
       displayName: payload.nombre,
@@ -202,8 +266,15 @@ export async function createContratista(
       role: "contractor_admin",
       status: "active",
     };
-    updates[`contractorAdmins/${admin_uid}`] = { branchId, contractorId: id, createdAt: now };
-    updates[`branches/${branchId}/contractors/${id}/admins/${admin_uid}`] = true;
+
+    updates[`contractorAdmins/${admin_uid}`] = {
+      branchId,
+      contractorId: id,
+      createdAt: now,
+    };
+
+    updates[`branches/${branchId}/contractors/${id}/admins/${admin_uid}`] =
+      true;
 
     await update(ref(rtdb), updates);
   }
@@ -218,31 +289,45 @@ export async function updateContratista(
 ) {
   const now = Date.now();
   const data = cleanUndefined({ ...patch, actualizado_en: now });
-  await update(ref(rtdb, `branches/${branchId}/contractors/${contractorId}`), data);
+  await update(
+    ref(rtdb, `branches/${branchId}/contractors/${contractorId}`),
+    data
+  );
 }
 
 /** Remover simple (solo elimina el nodo de la sucursal) */
-export async function removeContratistaFromBranch(branchId: string, contractorId: string) {
+export async function removeContratistaFromBranch(
+  branchId: string,
+  contractorId: string
+) {
   await remove(ref(rtdb, `branches/${branchId}/contractors/${contractorId}`));
 }
 
 /** ✅ Remueve de sucursal y limpia referencias. Si queda sin sucursales, lo mueve a contractors_pending. */
-export async function removeContratistaFromBranchClean(branchId: string, contractorId: string) {
+export async function removeContratistaFromBranchClean(
+  branchId: string,
+  contractorId: string
+) {
   // 1) Datos actuales (para admins y payload base)
-  const snap = await get(ref(rtdb, `branches/${branchId}/contractors/${contractorId}`));
+  const snap = await get(
+    ref(rtdb, `branches/${branchId}/contractors/${contractorId}`)
+  );
   if (!snap.exists()) return;
-  const contractor = snap.val() as (Contractor & { admins?: Record<string, true> });
+  const contractor = snap.val() as Contractor & {
+    admins?: Record<string, true>;
+  };
 
-  // 2) Borrar el nodo completo de la sucursal (NO incluir hijos del mismo nodo en update)
+  // 2) Borrar el nodo completo de la sucursal
   const updates: Record<string, any> = {};
   updates[`branches/${branchId}/contractors/${contractorId}`] = null;
 
   // Admins asociados (desde campo admins o admin_uid único)
   const adminUids = Object.keys(
-    contractor.admins || (contractor.admin_uid ? { [contractor.admin_uid]: true } : {})
+    contractor.admins ||
+      (contractor.admin_uid ? { [contractor.admin_uid]: true } : {})
   );
 
-  // 3) Limpiar referencias externas (no son hijas del nodo borrado → no hay conflicto)
+  // 3) Limpiar referencias externas
   for (const uid of adminUids) {
     updates[`contractorAdmins/${uid}`] = null;
     updates[`users/${uid}/branchId`] = null;
@@ -277,21 +362,32 @@ export async function toggleContratistaActivo(
   userId: string
 ) {
   const now = Date.now();
-  await update(ref(rtdb, `branches/${branchId}/contractors/${contractorId}`), {
-    activo,
-    actualizado_en: now,
-    actualizado_por: userId,
-  });
+  await update(
+    ref(rtdb, `branches/${branchId}/contractors/${contractorId}`),
+    {
+      activo,
+      actualizado_en: now,
+      actualizado_por: userId,
+    }
+  );
 }
 
-export async function deleteContratista(branchId: string, contractorId: string) {
+export async function deleteContratista(
+  branchId: string,
+  contractorId: string
+) {
   await remove(ref(rtdb, `branches/${branchId}/contractors/${contractorId}`));
 }
 
 /* ───────────────────── Listados y utilidades ───────────────────── */
-export async function listContratistasByBranch(branchId: string): Promise<ContratistaRow[]> {
+
+export async function listContratistasByBranch(
+  branchId: string
+): Promise<ContratistaRow[]> {
   const base = await listContractors(branchId);
-  return base.map((c) => ({ ...c, branchId })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  return base
+    .map((c) => ({ ...c, branchId }))
+    .sort((a, b) => safeName(a).localeCompare(safeName(b)));
 }
 
 export async function listContractorOrphans(): Promise<ContractorOrphan[]> {
@@ -299,9 +395,14 @@ export async function listContractorOrphans(): Promise<ContractorOrphan[]> {
   const usersSnap = await get(ref(rtdb, "users"));
 
   const pending = pendSnap.exists()
-    ? (pendSnap.val() as Record<string, (Contractor & { admin_uid?: string })>)
+    ? (pendSnap.val() as Record<
+        string,
+        Contractor & { admin_uid?: string }
+      >)
     : {};
-  const users = usersSnap.exists() ? (usersSnap.val() as Record<string, any>) : {};
+  const users = usersSnap.exists()
+    ? (usersSnap.val() as Record<string, any>)
+    : {};
 
   const out: ContractorOrphan[] = [];
 
@@ -319,42 +420,58 @@ export async function listContractorOrphans(): Promise<ContractorOrphan[]> {
       out.push({
         orphanUid: uid,
         contractorId,
-        nombre: c.nombre || u.displayName || u.email || `Contratista ${uid.slice(0, 6)}`,
+        nombre:
+          c.nombre ||
+          u.displayName ||
+          u.email ||
+          `Contratista ${uid.slice(0, 6)}`,
         email: c.contacto?.email || u.email || "",
-        creado_en: Number(c.creado_en ?? u.created_at ?? Date.now()),
+        creado_en: Number(
+          c.creado_en ?? u.created_at ?? Date.now()
+        ),
         creado_por: c.creado_por ?? u.created_by ?? null,
       });
     }
   }
 
-  return out.sort((a, b) => a.nombre.localeCompare(b.nombre));
+  return out.sort((a, b) => safeName(a).localeCompare(safeName(b)));
 }
 
 export async function listAllContratistasUnified(): Promise<
   Array<
-    ContratistaUnifiedRow |
-    (ContractorOrphan & {
-      branchIds: string[];
-      id: string;
-      activo: boolean;
-      orphanUid: string;
-      nit?: string;
-      contacto?: { nombre?: string; telefono?: string; email?: string };
-      actualizado_en?: number;
-      actualizado_por?: string;
-    })
+    | ContratistaUnifiedRow
+    | (ContractorOrphan & {
+        branchIds: string[];
+        id: string;
+        activo: boolean;
+        orphanUid: string;
+        nit?: string;
+        contacto?: {
+          nombre?: string;
+          telefono?: string;
+          email?: string;
+        };
+        actualizado_en?: number;
+        actualizado_por?: string;
+      })
   >
 > {
   const branchesSnap = await get(ref(rtdb, "branches"));
   const map: Record<string, ContratistaUnifiedRow> = {};
 
   if (branchesSnap.exists()) {
-    const branches = branchesSnap.val() as Record<string, { contractors?: Record<string, Contractor> }>;
+    const branches = branchesSnap.val() as Record<
+      string,
+      { contractors?: Record<string, Contractor> }
+    >;
     for (const [branchId, branchVal] of Object.entries(branches)) {
       const contractors = branchVal?.contractors || {};
       for (const [contractorId, c] of Object.entries(contractors)) {
         const existing = map[contractorId];
-        const base: Contractor = { ...(c as Contractor), id: contractorId };
+        const base: Contractor = {
+          ...(c as Contractor),
+          id: contractorId,
+        };
 
         if (!existing) {
           map[contractorId] = { ...base, branchIds: [branchId] };
@@ -367,7 +484,9 @@ export async function listAllContratistasUnified(): Promise<
           map[contractorId] = {
             ...(newer as Contractor),
             id: contractorId,
-            branchIds: Array.from(new Set([...(existing.branchIds || []), branchId])),
+            branchIds: Array.from(
+              new Set([...(existing.branchIds || []), branchId])
+            ),
           };
         }
       }
@@ -395,34 +514,51 @@ export async function listAllContratistasUnified(): Promise<
     };
   });
 
-  const unified = Object.values(map).sort((a, b) => a.nombre.localeCompare(b.nombre));
-  return [...unified, ...orphanRows].sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const unified = Object.values(map).sort((a, b) =>
+    safeName(a).localeCompare(safeName(b))
+  );
+
+  return [...unified, ...orphanRows].sort((a, b) =>
+    safeName(a).localeCompare(safeName(b))
+  );
 }
 
 export async function listAllContratistas(): Promise<ContratistaRow[]> {
   const branchesSnap = await get(ref(rtdb, "branches"));
   if (!branchesSnap.exists()) return [];
 
-  const branches = branchesSnap.val() as Record<string, { contractors?: Record<string, Contractor> }>;
+  const branches = branchesSnap.val() as Record<
+    string,
+    { contractors?: Record<string, Contractor> }
+  >;
   const rows: ContratistaRow[] = [];
+
   for (const [branchId, branchVal] of Object.entries(branches)) {
     const contractors = branchVal?.contractors || {};
     for (const [contractorId, c] of Object.entries(contractors)) {
-      rows.push({ ...(c as Contractor), id: contractorId, branchId });
+      rows.push({
+        ...(c as Contractor),
+        id: contractorId,
+        branchId,
+      });
     }
   }
-  return rows.sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  return rows.sort((a, b) => safeName(a).localeCompare(safeName(b)));
 }
 
-export async function listBranchIdsForContratista(contractorId: string): Promise<{
-  branchIds: string[];
-  sample?: Contractor;
-}> {
+export async function listBranchIdsForContratista(
+  contractorId: string
+): Promise<{ branchIds: string[]; sample?: Contractor }> {
   const branchesSnap = await get(ref(rtdb, "branches"));
   const out: string[] = [];
   let sample: Contractor | undefined;
+
   if (branchesSnap.exists()) {
-    const branches = branchesSnap.val() as Record<string, { contractors?: Record<string, Contractor> }>;
+    const branches = branchesSnap.val() as Record<
+      string,
+      { contractors?: Record<string, Contractor> }
+    >;
     for (const [bId, val] of Object.entries(branches)) {
       const cMap = val?.contractors || {};
       const raw = cMap[contractorId];
@@ -432,13 +568,13 @@ export async function listBranchIdsForContratista(contractorId: string): Promise
       }
     }
   }
+
   return { branchIds: out, sample };
 }
 
-export async function getContratistaFromAnyBranch(contractorId: string): Promise<{
-  branchId?: string;
-  data?: Contractor | null;
-}> {
+export async function getContratistaFromAnyBranch(
+  contractorId: string
+): Promise<{ branchId?: string; data?: Contractor | null }> {
   const { branchIds } = await listBranchIdsForContratista(contractorId);
   if (!branchIds.length) return { branchId: undefined, data: null };
   const b = branchIds[0];

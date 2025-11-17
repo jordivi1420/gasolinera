@@ -51,7 +51,7 @@ export default function SucursalView() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate("/admin/sucursales")}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5  text-gray-800 dark:text-white/90"
           >
             <span aria-hidden className="text-base">←</span>
             Atrás
@@ -67,7 +67,7 @@ export default function SucursalView() {
           {data && (
             <Link
               to={`/admin/sucursales/${data.id}/editar`}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5  text-gray-800 dark:text-white/90"
               title="Editar sucursal"
             >
               <PencilIcon className="h-4 w-4" />
@@ -106,14 +106,7 @@ export default function SucursalView() {
             </div>
           </Section>
 
-          <Section title="Gestionar" subtitle="Accesos rápidos de administración">
-            <div className="flex flex-wrap gap-3">
-              <Link to={`/admin/sucursales/${data.id}/subcentros`}   className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5">Subcentros</Link>
-              <Link to={`/admin/sucursales/${data.id}/contratistas`} className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5">Contratistas</Link>
-              <Link to={`/admin/sucursales/${data.id}/usuarios`}     className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5">Usuarios</Link>
-              <Link to={`/admin/sucursales/${data.id}/reportes`}     className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5">Reportes</Link>
-            </div>
-          </Section>
+          
 
           <Section title="Indicadores" subtitle="(Opcional) KPIs de la sucursal">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">

@@ -1,5 +1,5 @@
 // src/pages/admin/contractors/ContractorsTable.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Table,
@@ -39,8 +39,11 @@ type RowAll =
       actualizado_en?: number;
       actualizado_por?: string;
       branchIds: string[];
+      orphanUid: string;
       isOrphan: true;
     });
+
+const HEADERS = ["Contratista", "NIT", "Contacto", "Teléfono", "Estado", "Acciones"];
 
 export default function ContractorsTable({
   branchId: branchIdProp,
@@ -76,7 +79,8 @@ export default function ContractorsTable({
             .sort((a, b) => a.label.localeCompare(b.label)),
         ];
         setSucursales(opts);
-      } catch {
+      } catch (e) {
+        console.error("Error cargando sucursales para filtro:", e);
         setErr("No se pudieron cargar las sucursales.");
       }
     })();
@@ -92,30 +96,26 @@ export default function ContractorsTable({
           // Vista unificada sin duplicados + incluye huérfanos (sin sucursal)
           const allUnified = await listAllContratistasUnified();
           const normalized: RowAll[] = allUnified.map((r: any) =>
-            String(r.id).startsWith("auth-")
-              ? { ...r, isOrphan: true }
-              : { ...r, isOrphan: false }
+            r?.orphanUid ? { ...r, isOrphan: true } : { ...r, isOrphan: false }
           );
           setRows(normalized);
         } else {
           // Vista por sucursal puntual
           const list = await listContratistasByBranch(branchId);
-          const sorted = [...list].sort((a, b) => a.nombre.localeCompare(b.nombre));
+          const sorted = [...list].sort((a, b) =>
+            (a.nombre || "").localeCompare(b.nombre || "")
+          );
           setRows(sorted as RowAll[]);
         }
-      } catch {
-        setErr("No se pudieron cargar los contratistas.");
+      } catch (e: any) {
+        console.error("Error cargando contratistas:", e);
+        setErr(e?.message || "No se pudieron cargar los contratistas.");
         setRows([]);
       } finally {
         setLoading(false);
       }
     })();
   }, [branchId]);
-
-  const HEADERS = useMemo(
-    () => ["Contratista", "NIT", "Contacto", "Teléfono", "Estado", "Acciones"],
-    []
-  );
 
   // Handler flexible para tu Select
   const handleSucursalChange = (val: unknown) => {
@@ -156,9 +156,12 @@ export default function ContractorsTable({
     const isOrphan = (row as any).isOrphan === true;
 
     if (isOrphan) {
-      // Mantiene botón "Editar" (como pediste), pero lleva al flujo de asignación/creación
+      // Mantiene botón "Editar", pero lleva al flujo de asignación/creación
       nav(`/admin/contratistas/nueva`, {
-        state: { prefillName: row.nombre, prefillEmail: row.contacto?.email ?? "" },
+        state: {
+          prefillName: row.nombre,
+          prefillEmail: row.contacto?.email ?? "",
+        },
       });
       return;
     }
@@ -166,7 +169,6 @@ export default function ContractorsTable({
     const bIds = (row as any).branchIds as string[] | undefined;
 
     if (!branchId && bIds && bIds.length > 1) {
-      // Tiene varias sucursales; por simplicidad usamos la primera (puedes mejorar con modal)
       nav(`/admin/contratistas/${row.id}/editar`, { state: { branchId: bIds[0] } });
       return;
     }
@@ -198,9 +200,8 @@ export default function ContractorsTable({
           <div className="flex items-center gap-3">
             <div className="min-w-64">
               <Select
-                key={branchId ?? "all"}         // remount al cambiar filtro
+                key={branchId ?? "all"}
                 options={sucursales}
-                
                 onChange={handleSucursalChange}
               />
             </div>
@@ -226,26 +227,22 @@ export default function ContractorsTable({
       )}
 
       <div className="max-w-full overflow-x-auto">
-        <Table>
-          <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+        <Table className="min-w-[720px]">
+          <TableHeader className="text-xs uppercase bg-gray-50 dark:bg-white/5 dark:text-gray-400 sticky top-0 z-10">
             <TableRow>
               {HEADERS.map((h) => (
-                <TableCell
-                  key={h}
-                  isHeader
-                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                >
+                <TableCell key={h} isHeader className="px-4 py-3">
                   {h}
                 </TableCell>
               ))}
             </TableRow>
           </TableHeader>
 
-          <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+          <TableBody>
             {loading ? (
               <TableRow>
                 <TableCell
-                  className="px-5 py-6 text-start text-theme-sm text-gray-500 dark:text-gray-400"
+                  className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400"
                   colSpan={HEADERS.length}
                 >
                   Cargando…
@@ -254,7 +251,7 @@ export default function ContractorsTable({
             ) : err ? (
               <TableRow>
                 <TableCell
-                  className="px-5 py-6 text-start text-theme-sm text-red-600"
+                  className="px-4 py-4 text-sm text-red-600"
                   colSpan={HEADERS.length}
                 >
                   {err}
@@ -263,7 +260,7 @@ export default function ContractorsTable({
             ) : rows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  className="px-5 py-6 text-start text-theme-sm text-gray-500 dark:text-gray-400"
+                  className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400"
                   colSpan={HEADERS.length}
                 >
                   {branchId
@@ -273,28 +270,42 @@ export default function ContractorsTable({
               </TableRow>
             ) : (
               rows.map((c: RowAll) => {
-                // key única (evita colisiones cuando hay filtro por sucursal)
-                const rowKey = (c as any).branchId ? `${(c as any).branchId}:${c.id}` : c.id;
+                const rowKey = (c as any).branchId
+                  ? `${(c as any).branchId}:${c.id}`
+                  : c.id;
                 const branchesInfo = (c as any).branchIds as string[] | undefined;
                 const isOrphan = (c as any).isOrphan === true;
 
+                // Nombre “seguro” para mostrar y para iniciales
+                const displayName =
+                  (c.nombre && c.nombre.trim()) ||
+                  (c.id && String(c.id)) ||
+                  "Sin nombre";
+                const initials = displayName
+                  ? displayName.trim().slice(0, 2).toUpperCase()
+                  : "??";
+
                 return (
-                  <TableRow key={rowKey}>
-                    <TableCell className="px-5 py-4 sm:px-6 text-start">
+                  <TableRow
+                    key={rowKey}
+                    className="odd:bg-white even:bg-gray-50/50 dark:odd:bg-transparent dark:even:bg-white/[0.02] border-t border-gray-100 dark:border-gray-800"
+                  >
+                    {/* Columna: Nombre + ID + sucursales */}
+                    <TableCell className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10 grid place-items-center text-xs text-gray-500">
-                          {c.nombre.slice(0, 2).toUpperCase()}
+                          {initials}
                         </div>
                         <div>
-                          <span className="block font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                            {c.nombre}
+                          <span className="block text-sm font-medium text-gray-800 dark:text-white/90">
+                            {displayName}
                           </span>
-                          <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
+                          <span className="block text-xs text-gray-500 dark:text-gray-400">
                             ID: {c.id}
                           </span>
 
                           {!branchId && branchesInfo && (
-                            <span className="inline-flex mt-1 items-center gap-2 rounded-full border px-2 py-0.5 text-[11px] text-gray-600 border-gray-200 dark:border-white/10 dark:text-gray-300">
+                            <span className="inline-flex mt-1 items-center gap-2 rounded-full border px-2.5 py-0.5 text-[11px] text-gray-600 border-gray-200 dark:border-white/10 dark:text-gray-300">
                               {branchesInfo.length === 0
                                 ? "Sin sucursal (huérfano)"
                                 : branchesInfo.length === 1
@@ -306,45 +317,60 @@ export default function ContractorsTable({
                       </div>
                     </TableCell>
 
-                    <TableCell className="px-4 py-3 text-gray-600 text-start text-theme-sm dark:text-gray-400">
+                    {/* NIT */}
+                    <TableCell className="px-4 py-3 text-sm text-gray-800 dark:text-white/90">
                       {c.nit || "—"}
                     </TableCell>
 
-                    <TableCell className="px-4 py-3 text-gray-600 text-start text-theme-sm dark:text-gray-400">
+                    {/* Contacto */}
+                    <TableCell className="px-4 py-3 text-sm text-gray-800 dark:text-white/90">
                       {c.contacto?.nombre || "—"}
                       {c.contacto?.email ? (
-                        <span className="block text-theme-xs text-gray-500 dark:text-gray-400">
+                        <span className="block text-xs text-gray-500 dark:text-gray-400">
                           {c.contacto.email}
                         </span>
                       ) : null}
                     </TableCell>
 
-                    <TableCell className="px-4 py-3 text-gray-600 text-start text-theme-sm dark:text-gray-400">
+                    {/* Teléfono */}
+                    <TableCell className="px-4 py-3 text-sm text-gray-800 dark:text-white/90">
                       {c.contacto?.telefono || "—"}
                     </TableCell>
 
-                    <TableCell className="px-4 py-3 text-start">
-                      <Badge size="sm" color={isOrphan ? "warning" : c.activo ? "success" : "error"}>
+                    {/* Estado (Badge) */}
+                    <TableCell className="px-4 py-3 text-sm">
+                      <Badge
+                        size="sm"
+                        color={isOrphan ? "warning" : c.activo ? "success" : "error"}
+                      >
                         {isOrphan ? "Pendiente" : c.activo ? "Activo" : "Inactivo"}
                       </Badge>
                     </TableCell>
 
-                    <TableCell className="px-4 py-3 text-start">
-                      <div className="flex gap-2">
+                    {/* Acciones */}
+                    <TableCell className="px-4 py-3 text-right">
+                      <div className="inline-flex items-center gap-2">
                         <button
                           onClick={() => handleView(c)}
                           disabled={isOrphan}
-                          className="px-2 py-1 text-xs rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-60 disabled:pointer-events-none dark:border-gray-700 dark:hover:bg-white/5"
-                          title={isOrphan ? "Sin detalle: aún no tiene sucursal" : "Ver"}
+                          className="inline-flex items-center gap-2 px-2 py-1 text-xs font-medium border rounded-lg border-gray-300 hover:bg-gray-50 disabled:opacity-60 disabled:pointer-events-none dark:border-gray-700 dark:hover:bg-white/5 text-gray-800 dark:text-white/90"
+                          title={
+                            isOrphan
+                              ? "Sin detalle: aún no tiene sucursal"
+                              : "Ver detalle"
+                          }
                         >
                           Ver
                         </button>
 
-                        {/* ✅ Mantengo el botón de Editar */}
                         <button
                           onClick={() => handleEdit(c)}
-                          className="px-2 py-1 text-xs rounded-lg border border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5"
-                          title={isOrphan ? "Asignar a sucursal / completar registro" : "Editar"}
+                          className="inline-flex items-center gap-2 px-2 py-1 text-xs font-medium border rounded-lg border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5 text-gray-800 dark:text-white/90"
+                          title={
+                            isOrphan
+                              ? "Asignar a sucursal / completar registro"
+                              : "Editar"
+                          }
                         >
                           Editar
                         </button>

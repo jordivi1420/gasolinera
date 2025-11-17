@@ -140,8 +140,8 @@ export default function SucursalesTable() {
                   <TableCell className="px-4 py-3 text-sm font-medium text-gray-800 dark:text-white/90">
                     {r.nombre}
                   </TableCell>
-                  <TableCell className="px-4 py-3 text-sm">{r.departamento}</TableCell>
-                  <TableCell className="px-4 py-3 text-sm">{r.municipio}</TableCell>
+                  <TableCell className="px-4 py-3 text-sm font-medium text-gray-800 dark:text-white/90">{r.departamento}</TableCell>
+                  <TableCell className="px-4 py-3 text-sm font-medium text-gray-800 dark:text-white/90">{r.municipio}</TableCell>
                   <TableCell className="px-4 py-3">
                     <span
                       className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -177,7 +177,7 @@ export default function SucursalesTable() {
                       {/* Ver */}
                       <button
                         onClick={() => navigate(`/admin/sucursales/${r.id}`)}
-                        className="inline-flex items-center gap-2 px-2 py-1 text-xs font-medium border rounded-lg border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5"
+                        className="inline-flex items-center gap-2 px-2 py-1 text-xs font-medium border rounded-lg border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5 text-gray-800 dark:text-white/90"
                         title="Ver"
                       >
                         Ver
@@ -186,7 +186,7 @@ export default function SucursalesTable() {
                       {/* Editar */}
                       <button
                         onClick={() => navigate(`/admin/sucursales/${r.id}/editar`)}
-                        className="inline-flex items-center gap-2 px-2 py-1 text-xs font-medium border rounded-lg border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg白/5"
+                        className="inline-flex items-center gap-2 px-2 py-1 text-xs font-medium border rounded-lg border-gray-300 hover:bg-gray-50 dark:border-gray-700  dark:hover:bg白/5  text-gray-800 dark:text-white/90"
                         title="Editar"
                       >
                         <PencilIcon className="w-4 h-4" />
