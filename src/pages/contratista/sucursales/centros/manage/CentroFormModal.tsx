@@ -1,9 +1,9 @@
 // src/pages/admin/contratistas/centros/CentroFormModal.tsx
 import { useEffect, useState } from "react";
-import Label from "../../../../components/form/Label";
-import Input from "../../../../components/form/input/InputField";
-import Button from "../../../../components/ui/button/Button";
-import type { Centro } from "../../../../services/centros.service";
+import Label from "../../../../../components/form/Label";
+import Input from "../../../../../components/form/input/InputField";
+import Button from "../../../../../components/ui/button/Button";
+import type { Centro } from "../../../../../services/centros.service";
 
 export default function CentroFormModal({
   open,

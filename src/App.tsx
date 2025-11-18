@@ -6,77 +6,94 @@ import SignIn from "./pages/AuthPages/SignIn";
 import SignUp from "./pages/AuthPages/SignUp";
 import NotFound from "./pages/OtherPage/NotFound";
 import UserProfiles from "./pages/UserProfiles";
+
+// UI
 import Videos from "./pages/UiElements/Videos";
 import Images from "./pages/UiElements/Images";
 import Alerts from "./pages/UiElements/Alerts";
 import Badges from "./pages/UiElements/Badges";
-
-import AdminSucursalesPage from "./pages/admin/sucursales/AdminSucursalesPage";
-import ContratistaSucursalesPage from "./pages/contratista/sucursales/ContratistaSucursalesPage";
-import SucursalForm from "./pages/admin/sucursales/SucursalForm";
-import SucursalView from "./pages/admin/sucursales/SucursalView";
-import SubcentrosPage from "./pages/admin/sucursales/manage/SubcentrosPage";
-import ContratistasPage from "./pages/admin/sucursales/manage/ContratistasPage";
-import UsuariosPage from "./pages/admin/sucursales/manage/UsuariosPage";
-import ReportesPage from "./pages/admin/sucursales/manage/ReportesPage";
-import SucursalManageLayout from "./pages/admin/sucursales/manage/SucursalManageLayout";
-import CentrosPage from "./pages/admin/contratistas/centros/CentrosPage";
-import CentrosContratistaPage from "./pages/contratista/sucursales/centros/CentrosPage";
-import AdminSubcentrospage from "./pages/admin/contratistas/centros/subcentros/SubcentrosPage"
-import SubcentrosContratistaPage from "./pages/contratista/sucursales/centros/subcentros/SubcentrosPage";
-import CentroManageLayout from "./pages/contratista/sucursales/centros/subcentros/manage/CentroManageLayout";
-import Empleados from "./pages/contratista/sucursales/centros/subcentros/manage/Empleados";
-import Vehiculos from "./pages/contratista/sucursales/centros/subcentros/manage/Vehiculos";
-
-import VehiculosTable from "./pages/contratista/sucursales/centros/subcentros/manage/Components/VehiculoTable";
-import VehiculoForm from "./pages/contratista/sucursales/centros/subcentros/manage/Components/VehiculoForm";
-
-
-
-import AdminContratistasPage from "./pages/admin/contratistas/AdminContratistasPage";
-import ContratistaForm from "./pages/admin/contratistas/ContratistaForm";
-
 import Avatars from "./pages/UiElements/Avatars";
 import Buttons from "./pages/UiElements/Buttons";
+
+// Charts
 import LineChart from "./pages/Charts/LineChart";
 import BarChart from "./pages/Charts/BarChart";
+
+// Tools
 import Calendar from "./pages/Calendar";
 import BasicTables from "./pages/Tables/BasicTables";
 import FormElements from "./pages/Forms/FormElements";
+
+// Layout
 import Blank from "./pages/Blank";
 import AppLayout from "./layout/AppLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
 import Home from "./pages/Dashboard/Home";
 
+// Admin
+import RequireAdmin from "./routes/RequireAdmin";
+import AdminSucursalesPage from "./pages/admin/sucursales/AdminSucursalesPage";
+import SucursalForm from "./pages/admin/sucursales/SucursalForm";
+import SucursalView from "./pages/admin/sucursales/SucursalView";
+import SucursalManageLayout from "./pages/admin/sucursales/manage/SucursalManageLayout";
+import SubcentrosPage from "./pages/admin/sucursales/manage/SubcentrosPage";
+import ContratistasPage from "./pages/admin/sucursales/manage/ContratistasPage";
+import UsuariosPage from "./pages/admin/sucursales/manage/UsuariosPage";
+import ReportesPage from "./pages/admin/sucursales/manage/ReportesPage";
+
+import AdminContratistasPage from "./pages/admin/contratistas/AdminContratistasPage";
+import ContratistaForm from "./pages/admin/contratistas/ContratistaForm";
+import CentrosPage from "./pages/admin/contratistas/centros/CentrosPage";
+import AdminSubcentrosPage from "./pages/admin/contratistas/centros/subcentros/SubcentrosPage";
+
+// Contractor
+import RequireContractor from "./routes/RequireContractor";
+import ContratistaSucursalesPage from "./pages/contratista/sucursales/ContratistaSucursalesPage";
+import CentrosLayout from "./pages/contratista/sucursales/centros/manage/CentroManageLayout";
+import CentrosContratistaPage from "./pages/contratista/sucursales/centros/manage/CentrosPage";
+import SubcentrosContratistaPage from "./pages/contratista/sucursales/centros/subcentros/SubcentrosPage";
+
+// Vehículos POR SUCURSAL
+import VehiculosSucursalPage from "./pages/contratista/sucursales/centros/manage/Vehiculos";
+import VehiculoForm from "./pages/contratista/sucursales/centros/manage/Components/VehiculoForm";
+
+// Subcentro manage (empleados, reportes)
+import CentroManageLayout from "./pages/contratista/sucursales/centros/subcentros/manage/CentroManageLayout";
+import Empleados from "./pages/contratista/sucursales/centros/subcentros/manage/Empleados";
+
 // Guards
 import RequireAuth from "./routes/RequireAuth";
-import RequireAdmin from "./routes/RequireAdmin";
 import RedirectIfAuth from "./routes/RedirectIfAuth";
-import RequireContractor from "./routes/RequireContractor";
 
-// Auth Provider ✅
+// Auth provider
 import { AuthProvider } from "./context/AuthContext";
+
+// ======================================================================
 
 export default function App() {
   return (
     <Router>
       <ScrollToTop />
+
       <AuthProvider>
         <Suspense fallback={<div className="p-6">Cargando…</div>}>
+
           <Routes>
-            {/* Públicas (solo si NO estás autenticado) */}
+
+            {/* ================= PUBLIC ================= */}
             <Route element={<RedirectIfAuth />}>
               <Route path="/signin" element={<SignIn />} />
               <Route path="/signup" element={<SignUp />} />
               <Route path="/contractor/signin" element={<SignIn />} />
             </Route>
 
-            {/* Protegidas */}
+            {/* ================= AUTH PROTECTED ================= */}
             <Route element={<RequireAuth />}>
               <Route element={<AppLayout />}>
+
                 <Route index element={<Home />} />
 
-                {/* Páginas generales */}
+                {/* UI pages */}
                 <Route path="/profile" element={<UserProfiles />} />
                 <Route path="/calendar" element={<Calendar />} />
                 <Route path="/blank" element={<Blank />} />
@@ -91,15 +108,21 @@ export default function App() {
                 <Route path="/line-chart" element={<LineChart />} />
                 <Route path="/bar-chart" element={<BarChart />} />
 
-                {/* Admin Global */}
+                {/* ================= ADMIN AREA ================= */}
                 <Route element={<RequireAdmin />}>
+
                   <Route path="/admin" element={<Navigate to="/admin/sucursales" replace />} />
+
+                  {/* Sucursales */}
                   <Route path="/admin/sucursales" element={<AdminSucursalesPage />} />
                   <Route path="/admin/sucursales/nueva" element={<SucursalForm />} />
                   <Route path="/admin/sucursales/:id/editar" element={<SucursalForm />} />
                   <Route path="/admin/sucursales/:sucursalId" element={<SucursalView />} />
 
-                  <Route path="/admin/sucursales/:sucursalId/gestionar" element={<SucursalManageLayout />}>
+                  <Route
+                    path="/admin/sucursales/:sucursalId/gestionar"
+                    element={<SucursalManageLayout />}
+                  >
                     <Route index element={<Navigate to="contratistas" replace />} />
                     <Route path="subcentros" element={<SubcentrosPage />} />
                     <Route path="contratistas" element={<ContratistasPage />} />
@@ -107,47 +130,90 @@ export default function App() {
                     <Route path="reportes" element={<ReportesPage />} />
                   </Route>
 
+                  {/* Contratistas */}
                   <Route path="/admin/contratistas" element={<AdminContratistasPage />} />
                   <Route path="/admin/contratistas/nueva" element={<ContratistaForm />} />
                   <Route path="/admin/contratistas/:id/editar" element={<ContratistaForm />} />
-                  <Route path="/admin/sucursales/:sucursalId/contratistas/:contractorId/centros"element={<CentrosPage />}/>
 
-                  <Route path="/admin/sucursales/:sucursalId/contratistas/:contractorId/centros/:centroId/subcentros"element={<AdminSubcentrospage />}/>
-
-                </Route>
-
-                {/* Área contratistas */}
-                <Route element={<RequireContractor />}>
-                  <Route path="/c/:branchId/:contractorId/sucursales" element={<ContratistaSucursalesPage />} />
-                  <Route path="/c/:branchId/:contractorId/perfil" element={<UserProfiles />} />
-                  <Route path="/c/:branchId/:contractorId/reportes" element={<ReportsPlaceholder />} />
-                  <Route path="/c/:branchId/:contractorId/centros" element={<CentrosContratistaPage />} />
-                  <Route path="/c/:branchId/:contractorId/centros/:centroId/subcentros" element={<SubcentrosContratistaPage />}/>
-                  
+                  {/* Centros & Subcentros (Admin) */}
                   <Route
-                    path="/c/:branchId/:contractorId/centros/:centroId/subcentros/:subcentroId/vehiculos" element={<VehiculosTable />} />
+                    path="/admin/sucursales/:sucursalId/contratistas/:contractorId/centros"
+                    element={<CentrosPage />}
+                  />
 
-                  <Route path="/c/:branchId/:contractorId/centros/:centroId/subcentros/:subcentroId/vehiculos/nuevo" element={<VehiculoForm />} />
+                  <Route
+                    path="/admin/sucursales/:sucursalId/contratistas/:contractorId/centros/:centroId/subcentros"
+                    element={<AdminSubcentrosPage />}
+                  />
 
-                  <Route path="/c/:branchId/:contractorId/centros/:centroId/subcentros/:subcentroId/vehiculos/:vehiculoId" element={<VehiculoForm />}/>
-
-                  <Route path="/c/:branchId/:contractorId/centros/:centroId/subcentros/:subcentroId/vehiculos/:vehiculoId/editar"element={<VehiculoForm />}/>
-                <Route
-                  path="/c/:branchId/:contractorId/centros/:centroId/subcentros/:subcentroId/manage"
-                  element={<CentroManageLayout />}
-                >
-                  <Route index element={<Navigate to="empleados" replace />} />
-                  <Route path="empleados" element={<Empleados />} />
-                  <Route path="vehiculos" element={<Vehiculos />} />
-                  <Route path="reportes" element={<ReportesPage />} />
                 </Route>
-                  
+
+                {/* ================= CONTRACTOR AREA ================= */}
+                <Route element={<RequireContractor />}>
+
+                  {/* Sucursales */}
+                  <Route
+                    path="/c/:branchId/:contractorId/sucursales"
+                    element={<ContratistaSucursalesPage />}
+                  />
+
+                  <Route
+                    path="/c/:branchId/:contractorId/perfil"
+                    element={<UserProfiles />}
+                  />
+
+                  {/* Centros tab + Vehículos por sucursal */}
+                  <Route
+                    path="/c/:branchId/:contractorId/centros"
+                    element={<CentrosLayout />}
+                  >
+                    <Route index element={<CentrosContratistaPage />} />
+                    <Route path="vehiculos" element={<VehiculosSucursalPage />} />
+                  </Route>
+
+                  {/* Vehículos POR SUCURSAL (CRUD) */}
+                  <Route
+                    path="/c/:branchId/vehiculos"
+                    element={<VehiculosSucursalPage />}
+                  />
+
+                  <Route
+                    path="/c/:branchId/vehiculos/nuevo"
+                    element={<VehiculoForm />}
+                  />
+
+                  <Route
+                    path="/c/:branchId/vehiculos/:vehiculoId"
+                    element={<VehiculoForm />}
+                  />
+
+                  <Route
+                    path="/c/:branchId/vehiculos/:vehiculoId/editar"
+                    element={<VehiculoForm />}
+                  />
+
+                  {/* Subcentros (solo para empleados/reportes) */}
+                  <Route
+                    path="/c/:branchId/:contractorId/centros/:centroId/subcentros"
+                    element={<SubcentrosContratistaPage />}
+                  />
+
+                  <Route
+                    path="/c/:branchId/:contractorId/centros/:centroId/subcentros/:subcentroId/manage"
+                    element={<CentroManageLayout />}
+                  >
+                    <Route index element={<Navigate to="empleados" replace />} />
+                    <Route path="empleados" element={<Empleados />} />
+                    <Route path="reportes" element={<ReportesPage />} />
+                  </Route>
+
                 </Route>
               </Route>
             </Route>
 
-            {/* Fallback */}
+            {/* Not found */}
             <Route path="*" element={<NotFound />} />
+
           </Routes>
         </Suspense>
       </AuthProvider>
@@ -155,6 +221,5 @@ export default function App() {
   );
 }
 
-function ReportsPlaceholder() {
-  return <div className="p-6">Reportes del contratista (WIP)</div>;
-}
+// Simple report placeholder
+

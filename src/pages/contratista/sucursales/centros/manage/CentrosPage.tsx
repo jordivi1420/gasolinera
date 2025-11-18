@@ -1,14 +1,14 @@
 // src/pages/contratista/sucursales/centros/CentrosPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useAuth } from "../../../../context/AuthContext";
+import { useAuth } from "../../../../../context/AuthContext";
 import {
   listCentros,
   type Centro,
   createCentro,
   updateCentro,
   toggleCentroActivo,
-} from "../../../../services/centros.service";
+} from "../../../../../services/centros.service";
 
 import {
   Table,
@@ -16,11 +16,11 @@ import {
   TableBody,
   TableRow,
   TableCell,
-} from "../../../../components/ui/table";
+} from "../../../../../components/ui/table";
 
-import Button from "../../../../components/ui/button/Button";
+import Button from "../../../../../components/ui/button/Button";
 import CentroFormModal from "./CentroFormModal";
-import { ShootingStarIcon } from "../../../../icons";
+import { ShootingStarIcon } from "../../../../../icons";
 
 export default function CentrosContratistaPage() {
   const navigate = useNavigate();
@@ -161,16 +161,7 @@ export default function CentrosContratistaPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 p-5 border-b border-gray-200 md:flex-row md:items-center md:justify-between dark:border-gray-800">
         <div className="space-y-2">
-          {/* Botón volver a sucursales */}
-          <button
-            onClick={() => navigate(`/c/${branchId}/${contractorRtdbId}/sucursales`)}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5"
-            title="Volver a la sucursal"
-          >
-            <span className="inline-block h-3 w-3 rotate-180 border-l-2 border-b-2 border-current" />
-            Volver
-          </button>
-
+      
           <div>
             <h3 className="font-semibold text-gray-800 text-title-sm dark:text-white/90">
               Centros del contratista
